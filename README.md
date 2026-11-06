@@ -2,7 +2,7 @@
 
 A native iPhone client for cloud-hosted Windows and Linux desktops, with a touch-first desktop interface, remote development workspaces, reverse-engineering workstations, and game-streaming support.
 
-> **Project status:** Foundation scaffold. This repository does not yet run Windows/Linux locally on iOS and does not yet include a production cloud service. Full desktop applications are planned to execute in isolated cloud machines and stream to the iPhone.
+> **Project status:** iOS client foundation. This repository does not run Windows/Linux locally on iOS and does not yet include a production cloud service. Full desktop applications are intended to execute in isolated cloud machines and stream to the iPhone.
 
 ## Product direction
 
@@ -15,31 +15,31 @@ A native iPhone client for cloud-hosted Windows and Linux desktops, with a touch
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) and [docs/roadmap.md](docs/roadmap.md).
+See [docs/architecture.md](docs/architecture.md), [docs/control-plane-api.md](docs/control-plane-api.md), and [docs/roadmap.md](docs/roadmap.md).
 
-## Build from an iPhone
+## Build
 
-1. Edit files in GitHub's web editor or a browser-based development environment.
-2. Push changes to GitHub.
-3. GitHub Actions uses a hosted macOS runner and Xcode to build the iOS app.
-4. Configure Apple signing secrets before attempting a signed distribution build.
+1. Push changes to GitHub.
+2. GitHub Actions uses a hosted macOS Intel runner and Xcode to build for generic iOS devices.
+3. Download the `WinlatorIOS-Unsigned-IPA` artifact from the successful workflow run.
+4. Configure Apple signing and provisioning before installing on a physical iPhone.
 
-The initial workflow builds an unsigned simulator application. Device installation requires signing and provisioning configured by the repository owner.
+The workflow packages an **unsigned device IPA**, not a simulator build. An unsigned IPA is a build artifact; it is not directly installable on a normal iPhone until it is signed with a valid certificate and provisioning profile.
 
 ## Requirements
 
 - Xcode and the iOS SDK on a macOS build runner.
 - XcodeGen (installed by the workflow).
-- An Apple Developer signing setup for device distribution.
+- Apple Developer signing setup for device distribution.
 - A separately deployed backend and Windows/Linux compute infrastructure for remote sessions.
 
 ## Current app
 
-The initial SwiftUI app is a navigable shell with Home, Workspaces, Files, and Settings tabs. Remote session creation is intentionally represented as a not-yet-configured state until a backend endpoint and authentication flow are implemented.
+The SwiftUI app contains Home, Workspaces, Files, and Settings tabs. Workspace list/create/stop requests use the documented control-plane API. The backend URL is configured in Settings, and its bearer token is stored in the iOS Keychain. The Files tab and live remote desktop transport remain planned; no cloud machine is provisioned by this repository alone.
 
 ## Security
 
-Never commit API keys, cloud credentials, signing certificates, provisioning profiles, IDA installers, licence files, or user binaries. See [docs/security.md](docs/security.md).
+Never commit API keys, cloud credentials, signing certificates, provisioning profiles, IDA installers, licence files, or user binaries. Backend access tokens are stored in iOS Keychain. See [docs/security.md](docs/security.md).
 
 ## License
 

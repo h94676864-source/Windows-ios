@@ -39,11 +39,20 @@ enum BackendConnectionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Enter a valid HTTPS backend URL."
+            return "Enter a valid backend URL."
         case .invalidResponse:
             return "The backend returned an invalid response."
         case .httpStatus(let code):
-            return "Backend request failed (HTTP \(code))."
+            switch code {
+            case 401, 403:
+                return "Backend authentication failed. Check the access token in Settings."
+            case 404:
+                return "The backend endpoint was not found. Check the configured API URL."
+            case 429:
+                return "The backend rate limit was reached. Try again shortly."
+            default:
+                return "Backend request failed (HTTP \(code))."
+            }
         }
     }
 }
@@ -74,13 +83,17 @@ struct BackendClient {
     }
 
     func stopWorkspace(id: String) async throws {
-        let safeID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let safeID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              !safeID.isEmpty else {
+            throw BackendConnectionError.invalidURL
+        }
         _ = try await send(path: "/api/v1/workspaces/\(safeID)", method: "DELETE")
     }
 
     private func send(path: String, method: String, body: Data? = nil) async throws -> (Data, URLResponse) {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
-              components.scheme?.lowercased() == "https" || components.scheme?.lowercased() == "http",
+              let scheme = components.scheme?.lowercased(),
+              ["https", "http"].contains(scheme),
               components.host != nil else {
             throw BackendConnectionError.invalidURL
         }
@@ -94,6 +107,9 @@ struct BackendClient {
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if let token = try SecureTokenStore.read(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = body
 
         let (data, response) = try await session.data(for: request)

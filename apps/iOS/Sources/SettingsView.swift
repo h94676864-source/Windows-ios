@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("backendBaseURL") private var backendBaseURL = ""
+    @State private var tokenDraft = ""
+    @State private var tokenMessage = "No token saved"
     @State private var healthMessage = "Not tested"
     @State private var isChecking = false
     @State private var isHealthy = false
@@ -16,15 +18,29 @@ struct SettingsView: View {
                         .autocorrectionDisabled()
                         .accessibilityLabel("Backend URL")
 
+                    SecureField("Backend access token", text: $tokenDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Backend bearer token")
+
+                    HStack {
+                        Button("Save token") { saveToken() }
+                            .disabled(tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Spacer()
+                        Button("Remove", role: .destructive) { removeToken() }
+                    }
+
+                    Text(tokenMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
                     Button {
                         Task { await checkBackend() }
                     } label: {
                         HStack {
                             Text("Test connection")
                             Spacer()
-                            if isChecking {
-                                ProgressView()
-                            }
+                            if isChecking { ProgressView() }
                         }
                     }
                     .disabled(isChecking || backendBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -42,10 +58,41 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
-                    LabeledContent("Version", value: "0.2.0-dev")
+                    LabeledContent("Version", value: "0.3.0-dev")
                 }
             }
             .navigationTitle("Settings")
+            .task { loadTokenStatus() }
+        }
+    }
+
+    private func loadTokenStatus() {
+        do {
+            tokenMessage = try SecureTokenStore.read() == nil ? "No token saved" : "Access token stored securely in iOS Keychain"
+        } catch {
+            tokenMessage = error.localizedDescription
+        }
+    }
+
+    private func saveToken() {
+        let token = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return }
+        do {
+            try SecureTokenStore.save(token)
+            tokenDraft = ""
+            tokenMessage = "Access token stored securely in iOS Keychain"
+        } catch {
+            tokenMessage = error.localizedDescription
+        }
+    }
+
+    private func removeToken() {
+        do {
+            try SecureTokenStore.delete()
+            tokenDraft = ""
+            tokenMessage = "No token saved"
+        } catch {
+            tokenMessage = error.localizedDescription
         }
     }
 

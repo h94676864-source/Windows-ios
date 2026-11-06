@@ -4,11 +4,19 @@ The iOS client talks to a separately deployed control-plane service. This reposi
 
 All endpoints are relative to the configured backend URL. Responses use JSON and UTF-8.
 
+## Authentication
+
+Workspace endpoints require a bearer token:
+
+`Authorization: Bearer <access-token>`
+
+The iOS app stores this token in the device Keychain and attaches it to backend requests. The backend must validate the token, enforce ownership on every workspace ID, and reject expired or revoked credentials. Never put provider credentials in this token.
+
 ## Health
 
 `GET /health`
 
-Returns HTTP 200 when the API is ready. The iOS Settings screen uses this endpoint for its connection test.
+Returns HTTP 200 when the API is ready. The iOS Settings screen uses this endpoint for its connection test. If health is intentionally public, it may omit authentication; otherwise the configured bearer token is sent.
 
 ## List workspaces
 
@@ -63,4 +71,4 @@ Returns any successful 2xx response after accepting the stop request.
 
 ## Current implementation boundary
 
-The iOS app now has typed list/create/stop calls and workspace UI. Until a backend implementing this contract is deployed and its URL is entered in Settings, these actions will return a connection error. This contract is not itself a running cloud service.
+The iOS app now has typed list/create/stop calls, workspace UI, and Keychain-backed bearer-token support. Until a backend implementing this contract is deployed and its URL is entered in Settings, workspace actions will not provision machines. This contract is not itself a running cloud service.
