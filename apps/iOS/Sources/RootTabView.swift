@@ -6,8 +6,8 @@ struct RootTabView: View {
             HomeView()
                 .tabItem { Label("Home", systemImage: "house") }
 
-            WindowsDesktopView()
-                .tabItem { Label("Desktop", systemImage: "display") }
+            WinlatorManagerView()
+                .tabItem { Label("Winlator", systemImage: "shippingbox") }
 
             WorkspacesView()
                 .tabItem { Label("Workspaces", systemImage: "pc") }
