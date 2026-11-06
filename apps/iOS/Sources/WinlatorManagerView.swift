@@ -170,8 +170,14 @@ struct WinlatorManagerView: View {
                 Button("Create") {
                     let name = newContainerName.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !name.isEmpty {
-                        containers.append(WinlatorContainer(name: name))
-                        Self.save(containers, key: "winlator.containers")
+                        let container = WinlatorContainer(name: name)
+                        do {
+                            try WinlatorContainerStorage.createLayout(for: container)
+                            containers.append(container)
+                            Self.save(containers, key: "winlator.containers")
+                        } catch {
+                            importError = error.localizedDescription
+                        }
                     }
                     newContainerName = "My Windows Container"
                 }
