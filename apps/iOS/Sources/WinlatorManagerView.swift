@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-private struct WinlatorContainer: Codable, Identifiable {
+struct WinlatorContainer: Codable, Identifiable {
     var id: UUID = UUID()
     var name: String
     var windowsVersion: String = "Windows 10"
@@ -30,7 +30,62 @@ struct WinlatorManagerView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView { pageContent }
+            .navigationTitle("Winlator")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Create container", systemImage: "plus") { showingNewContainer = true }
+                        Button("Import Windows EXE", systemImage: "square.and.arrow.down") { showingImporter = true }
+                    } label: { Image(systemName: "plus.circle.fill") }
+                }
+            }
+            .sheet(item: $selectedContainer) { container in
+                ContainerSettingsView(container: container) { updated in
+                    if let index = containers.firstIndex(where: { $0.id == updated.id }) {
+                        containers[index] = updated
+                        Self.save(containers, key: "winlator.containers")
+                    }
+                }
+            }
+            .alert("Create container", isPresented: $showingNewContainer) {
+                TextField("Container name", text: $newContainerName)
+                Button("Cancel", role: .cancel) { }
+                Button("Create") {
+                    let name = newContainerName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty {
+                        let container = WinlatorContainer(name: name)
+                        do {
+                            try WinlatorContainerStorage.createLayout(for: container)
+                            containers.append(container)
+                            Self.save(containers, key: "winlator.containers")
+                        } catch {
+                            importError = error.localizedDescription
+                        }
+                    }
+                    newContainerName = "My Windows Container"
+                }
+            } message: {
+                Text("Create a Windows environment profile.")
+            }
+            .fileImporter(isPresented: $showingImporter,
+                allowedContentTypes: [UTType(filenameExtension: "exe") ?? .data, UTType(filenameExtension: "msi") ?? .data],
+                allowsMultipleSelection: true, onCompletion: importExecutables)
+            .alert("Runtime information", isPresented: $showingRuntimeInfo) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
+            }
+            .alert("Import failed", isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button("OK", role: .cancel) { importError = nil }
+            } message: { Text(importError ?? "Unknown import error.") }
+        }
+    }
+
+    private var pageContent: some View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("WINLATOR").font(.caption.weight(.bold)).tracking(2.5).foregroundStyle(.cyan)
@@ -146,59 +201,6 @@ struct WinlatorManagerView: View {
                     .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
                 }
                 .padding()
-            }
-            .navigationTitle("Winlator")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Create container", systemImage: "plus") { showingNewContainer = true }
-                        Button("Import Windows EXE", systemImage: "square.and.arrow.down") { showingImporter = true }
-                    } label: { Image(systemName: "plus.circle.fill") }
-                }
-            }
-            .sheet(item: $selectedContainer) { container in
-                ContainerSettingsView(container: container) { updated in
-                    if let index = containers.firstIndex(where: { $0.id == updated.id }) {
-                        containers[index] = updated
-                        Self.save(containers, key: "winlator.containers")
-                    }
-                }
-            }
-            .alert("Create container", isPresented: $showingNewContainer) {
-                TextField("Container name", text: $newContainerName)
-                Button("Cancel", role: .cancel) { }
-                Button("Create") {
-                    let name = newContainerName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !name.isEmpty {
-                        let container = WinlatorContainer(name: name)
-                        do {
-                            try WinlatorContainerStorage.createLayout(for: container)
-                            containers.append(container)
-                            Self.save(containers, key: "winlator.containers")
-                        } catch {
-                            importError = error.localizedDescription
-                        }
-                    }
-                    newContainerName = "My Windows Container"
-                }
-            } message: {
-                Text("Create a Windows environment profile.")
-            }
-            .fileImporter(isPresented: $showingImporter,
-                allowedContentTypes: [UTType(filenameExtension: "exe") ?? .data, UTType(filenameExtension: "msi") ?? .data],
-                allowsMultipleSelection: true, onCompletion: importExecutables)
-            .alert("Runtime information", isPresented: $showingRuntimeInfo) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
-            }
-            .alert("Import failed", isPresented: Binding(
-                get: { importError != nil },
-                set: { if !$0 { importError = nil } }
-            )) {
-                Button("OK", role: .cancel) { importError = nil }
-            } message: { Text(importError ?? "Unknown import error.") }
-        }
     }
 
     private func importExecutables(_ result: Result<[URL], Error>) {

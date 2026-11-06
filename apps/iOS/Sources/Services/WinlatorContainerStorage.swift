@@ -11,6 +11,6 @@ enum WinlatorContainerStorage {
         }
         let manifest = ["id": container.id.uuidString, "name": container.name, "rootfs": "empty-awaiting-runtime", "wine": "not-installed", "translation": "not-installed", "graphics": "not-configured"]
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: root.appendingPathComponent("container.json"), options: .atomic)
+        try data.write(to: root.appendingPathComponent("container.json"), options: Data.WritingOptions.atomic)
     }
 }
