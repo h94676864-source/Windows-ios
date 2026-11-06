@@ -1,4 +1,4 @@
-name: iOS Cloud Build
+name: iOS Device Build (Unsigned IPA)
 
 on:
   push:
@@ -31,28 +31,31 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build iOS Simulator app
+      - name: Build for iPhone (unsigned)
         run: |
           xcodebuild \
             -project WinlatorIOS.xcodeproj \
             -scheme WinlatorIOS \
-            -sdk iphonesimulator \
-            -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build/DerivedData \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DeviceData \
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Package simulator app
+      - name: Package unsigned IPA
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/WinlatorIOS.app"
+          APP_PATH="build/DeviceData/Build/Products/Release-iphoneos/WinlatorIOS.app"
           test -d "$APP_PATH"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" WinlatorIOS-Simulator.zip
+          mkdir -p Payload
+          ditto "$APP_PATH" Payload/WinlatorIOS.app
+          ditto -c -k --sequesterRsrc --keepParent Payload WinlatorIOS-Unsigned.ipa
+          test -s WinlatorIOS-Unsigned.ipa
 
-      - name: Upload simulator artifact
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: WinlatorIOS-Simulator
-          path: WinlatorIOS-Simulator.zip
+          name: WinlatorIOS-Unsigned-IPA
+          path: WinlatorIOS-Unsigned.ipa
           if-no-files-found: error
           retention-days: 14
