@@ -15,7 +15,7 @@ struct WinlatorInstallerInspection {
             "Architecture: \(architecture)",
             "Size: \(ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file))",
             "SHA-256: \(sha256)",
-            "Structure: \(isStructurallyValid ? "Valid" : "Invalid")
+            "Structure: \(isStructurallyValid ? "Valid" : "Invalid")",
         ] + details).joined(separator: "\n")
     }
 }
