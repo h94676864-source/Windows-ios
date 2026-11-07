@@ -32,7 +32,12 @@ struct WinlatorManagerView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView { pageContent }
+            importStatusAlertView
+        }
+    }
+
+    private var navigationBaseView: some View {
+        ScrollView { pageContent }
             .navigationTitle("Winlator")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -42,70 +47,102 @@ struct WinlatorManagerView: View {
                     } label: { Image(systemName: "plus.circle.fill") }
                 }
             }
-            .sheet(item: $selectedShortcut) { shortcut in
-                WindowsAppLauncherSheet(shortcut: shortcut, containers: containers,
-                    onAssign: { updated, containerID in
-                        if let index = shortcuts.firstIndex(where: { $0.id == updated.id }) {
-                            shortcuts[index].containerID = containerID
-                            Self.save(shortcuts, key: "winlator.shortcuts")
-                        }
-                    },
-                    onLaunch: { app, container in
-                        launchMessage = WinlatorWineExecutionBridge.launch(
-                            executableURL: URL(fileURLWithPath: app.localPath), container: container
-                        )
-                    })
+    }
+
+    private var shortcutSheetView: some View {
+        navigationBaseView.sheet(item: $selectedShortcut) { shortcut in
+            WindowsAppLauncherSheet(
+                shortcut: shortcut,
+                containers: containers,
+                onAssign: { updated, containerID in
+                    if let index = shortcuts.firstIndex(where: { $0.id == updated.id }) {
+                        shortcuts[index].containerID = containerID
+                        Self.save(shortcuts, key: "winlator.shortcuts")
+                    }
+                },
+                onLaunch: { app, container in
+                    launchMessage = WinlatorWineExecutionBridge.launch(
+                        executableURL: URL(fileURLWithPath: app.localPath),
+                        container: container
+                    )
+                }
+            )
+        }
+    }
+
+    private var containerSheetView: some View {
+        shortcutSheetView.sheet(item: $selectedContainer) { container in
+            ContainerSettingsView(container: container) { updated in
+                if let index = containers.firstIndex(where: { $0.id == updated.id }) {
+                    containers[index] = updated
+                    Self.save(containers, key: "winlator.containers")
+                }
             }
-            .sheet(item: $selectedContainer) { container in
-                ContainerSettingsView(container: container) { updated in
-                    if let index = containers.firstIndex(where: { $0.id == updated.id }) {
-                        containers[index] = updated
+        }
+    }
+
+    private var createContainerAlertView: some View {
+        containerSheetView.alert("Create container", isPresented: $showingNewContainer) {
+            TextField("Container name", text: $newContainerName)
+            Button("Cancel", role: .cancel) { }
+            Button("Create") {
+                let name = newContainerName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    let container = WinlatorContainer(name: name)
+                    do {
+                        try WinlatorContainerStorage.createLayout(for: container)
+                        containers.append(container)
                         Self.save(containers, key: "winlator.containers")
+                    } catch {
+                        importError = error.localizedDescription
                     }
                 }
+                newContainerName = "My Windows Container"
             }
-            .alert("Create container", isPresented: $showingNewContainer) {
-                TextField("Container name", text: $newContainerName)
-                Button("Cancel", role: .cancel) { }
-                Button("Create") {
-                    let name = newContainerName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !name.isEmpty {
-                        let container = WinlatorContainer(name: name)
-                        do {
-                            try WinlatorContainerStorage.createLayout(for: container)
-                            containers.append(container)
-                            Self.save(containers, key: "winlator.containers")
-                        } catch {
-                            importError = error.localizedDescription
-                        }
-                    }
-                    newContainerName = "My Windows Container"
-                }
-            } message: {
-                Text("Create a Windows environment profile.")
-            }
-            .fileImporter(isPresented: $showingImporter,
-                allowedContentTypes: [UTType(filenameExtension: "exe") ?? .data, UTType(filenameExtension: "msi") ?? .data],
-                allowsMultipleSelection: true, onCompletion: importExecutables)
-            .alert("Windows app launch", isPresented: Binding(
-                get: { launchMessage != nil },
-                set: { if !$0 { launchMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) { launchMessage = nil }
-            } message: {
-                Text(launchMessage ?? "")
-            }
-            .alert("Runtime information", isPresented: $showingRuntimeInfo) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
-            }
-            .alert("Import / RootFS status", isPresented: Binding(
-                get: { importError != nil },
-                set: { if !$0 { importError = nil } }
-            )) {
-                Button("OK", role: .cancel) { importError = nil }
-            } message: { Text(importError ?? "Unknown import error.") }
+        } message: {
+            Text("Create a Windows environment profile.")
+        }
+    }
+
+    private var importerView: some View {
+        createContainerAlertView.fileImporter(
+            isPresented: $showingImporter,
+            allowedContentTypes: [
+                UTType(filenameExtension: "exe") ?? .data,
+                UTType(filenameExtension: "msi") ?? .data
+            ],
+            allowsMultipleSelection: true,
+            onCompletion: importExecutables
+        )
+    }
+
+    private var launchAlertView: some View {
+        importerView.alert("Windows app launch", isPresented: Binding(
+            get: { launchMessage != nil },
+            set: { if !$0 { launchMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { launchMessage = nil }
+        } message: {
+            Text(launchMessage ?? "")
+        }
+    }
+
+    private var runtimeAlertView: some View {
+        launchAlertView.alert("Runtime information", isPresented: $showingRuntimeInfo) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
+        }
+    }
+
+    private var importStatusAlertView: some View {
+        runtimeAlertView.alert("Import / RootFS status", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "Unknown import error.")
         }
     }
 
