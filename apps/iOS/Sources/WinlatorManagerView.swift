@@ -288,10 +288,14 @@ struct WinlatorManagerView: View {
             try manager.createDirectory(at: folder, withIntermediateDirectories: true)
             for source in urls {
                 let hasAccess = source.startAccessingSecurityScopedResource()
-                defer { if hasAccess { source.stopAccessingSecurityScopedResource() } }
-                let destination = folder.appendingPathComponent(source.lastPathComponent)
-                if manager.fileExists(atPath: destination.path) { try manager.removeItem(at: destination) }
-                try manager.copyItem(at: source, to: destination)
+                let destination = uniqueImportedDestination(for: source.lastPathComponent, in: folder)
+                do {
+                    try manager.copyItem(at: source, to: destination)
+                    if hasAccess { source.stopAccessingSecurityScopedResource() }
+                } catch {
+                    if hasAccess { source.stopAccessingSecurityScopedResource() }
+                    throw error
+                }
                 shortcuts.append(WinlatorShortcut(
                     name: source.deletingPathExtension().lastPathComponent,
                     filename: source.lastPathComponent,
@@ -303,6 +307,18 @@ struct WinlatorManagerView: View {
         } catch {
             importError = error.localizedDescription
         }
+    }
+
+    private func uniqueImportedDestination(for filename: String, in folder: URL) -> URL {
+        let original = URL(fileURLWithPath: filename)
+        var candidate = folder.appendingPathComponent(filename)
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let renamed = original.deletingPathExtension().lastPathComponent + " (\\(index))." + original.pathExtension
+            candidate = folder.appendingPathComponent(renamed)
+            index += 1
+        }
+        return candidate
     }
 
     private func removeShortcut(_ shortcut: WinlatorShortcut) {

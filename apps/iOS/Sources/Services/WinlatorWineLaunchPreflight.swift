@@ -19,6 +19,20 @@ enum WinlatorWineLaunchPreflight {
         checks.append("\(supported ? "✓" : "✗") Installer type (.EXE/.MSI)")
         valid = valid && supported
 
+        do {
+            let inspection = try WinlatorInstallerInspector.inspect(executableURL)
+            checks.append("✓ Installer structure: \(inspection.format)")
+            checks.append("✓ Detected architecture: \(inspection.architecture)")
+            checks.append("✓ SHA-256: \(inspection.sha256)")
+            if !inspection.isStructurallyValid {
+                checks.append("✗ Installer structure validation failed")
+                valid = false
+            }
+        } catch {
+            checks.append("✗ Installer inspection: \(error.localizedDescription)")
+            valid = false
+        }
+
         let attributes = try? manager.attributesOfItem(atPath: executableURL.path)
         let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
         let regular = (attributes?[.type] as? FileAttributeType) == .typeRegular

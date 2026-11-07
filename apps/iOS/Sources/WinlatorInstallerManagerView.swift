@@ -6,6 +6,7 @@ struct WinlatorInstallerManagerView: View {
     @State private var installers: [WinlatorInstallerRecord] = []
     @State private var showingImporter = false
     @State private var errorMessage: String?
+    @State private var inspectionMessage: String?
 
     var body: some View {
         List {
@@ -14,16 +15,27 @@ struct WinlatorInstallerManagerView: View {
                     description: Text("Import EXE/MSI files into this container's C: drive."))
             } else {
                 ForEach(installers) { item in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.name).font(.headline)
-                        Text(item.fileURL.lastPathComponent).font(.caption).foregroundStyle(.secondary)
-                        Text(ByteCountFormatter.string(fromByteCount: item.byteCount, countStyle: .file))
-                            .font(.caption2).foregroundStyle(.tertiary)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.name).font(.headline)
+                                Text(item.fileURL.lastPathComponent).font(.caption).foregroundStyle(.secondary)
+                                Text(ByteCountFormatter.string(fromByteCount: item.byteCount, countStyle: .file))
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            Button {
+                                inspect(item)
+                            } label: {
+                                Image(systemName: "doc.text.magnifyingglass")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Inspect installer")
+                        }
                     }
                     .contextMenu {
-                        Button("Remove installer", systemImage: "trash", role: .destructive) {
-                            remove(item)
-                        }
+                        Button("Inspect installer", systemImage: "doc.text.magnifyingglass") { inspect(item) }
+                        Button("Remove installer", systemImage: "trash", role: .destructive) { remove(item) }
                     }
                 }
                 .onDelete(perform: deleteOffsets)
@@ -44,11 +56,21 @@ struct WinlatorInstallerManagerView: View {
         )) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+        .alert("Installer inspection", isPresented: Binding(
+            get: { inspectionMessage != nil }, set: { if !$0 { inspectionMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { inspectionMessage = nil }
+        } message: { Text(inspectionMessage ?? "") }
         .onAppear(perform: reload)
     }
 
     private func reload() {
         do { installers = try WinlatorInstallerStorage.list(for: container) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    private func inspect(_ item: WinlatorInstallerRecord) {
+        do { inspectionMessage = try WinlatorInstallerInspector.inspect(item.fileURL).summary }
         catch { errorMessage = error.localizedDescription }
     }
 
