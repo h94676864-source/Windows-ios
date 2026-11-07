@@ -84,7 +84,7 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 start = source.find("    new = (")
-end = source.find("\\n    p.write_text(s.replace(old, new, 1))", start)
+end = source.find("\n    p.write_text(s.replace(old, new, 1))", start)
 if start >= 0 and end >= 0:
     source = source[:start] + "    new = old" + source[end:]
 elif "    new = old" not in source:
