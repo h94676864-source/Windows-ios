@@ -418,7 +418,7 @@ private struct ContainerSettingsView: View {
                 }
                 Section("Linux RootFS") {
                     let report = WinlatorRootFSDeepValidator.inspect(for: container)
-                    LabeledContent("Compatibility", value: report.title)
+                    LabeledContent("Compatibility", value: report.isReady ? "Ready" : "Needs attention")
                     Button("Check RootFS compatibility", systemImage: "checkmark.shield") {
                         rootFSMessage = report.message
                     }
