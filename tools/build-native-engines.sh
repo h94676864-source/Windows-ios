@@ -34,32 +34,65 @@ git -C "$MADEIRA" submodule update --init --recursive --depth 1
 git -C "$MADEIRA" submodule status --recursive
 [[ -x "$MADEIRA/wine/configure" ]] || die "Wine submodule checkout is incomplete: expected Vendor/Madeira/wine/configure."
 
-# DXMT's pinned revision uses a legacy Metal atomic builtin spelling that
-# expands to a five-argument intrinsic on the Xcode 16.4 Metal compiler.
-# Use the upstream atomic<T> API form, which is compatible with this SDK.
-DXMT_TESSELLATION="$MADEIRA/dxmt/src/airconv/shaders/air_tessellation.metal"
-python3 - "$DXMT_TESSELLATION" <<'PY'
-import pathlib
+# LLVM 15 is a large checkout. The upstream helper performs a single full
+# shallow clone; transient GitHub transport timeouts then waste the entire
+# native build. Pre-seed only the llvm/ subtree with blob filtering and retries.
+log "Prepare pinned LLVM 15 source (sparse checkout with retry)"
+LLVM_SRC="$MADEIRA/toolchains/llvm-project"
+LLVM_TAG="llvmorg-15.0.7"
+LLVM_SOURCE_OK=0
+if [[ -f "$LLVM_SRC/llvm/CMakeLists.txt" ]] &&
+   [[ "$(git -C "$LLVM_SRC" describe --tags --exact-match 2>/dev/null || true)" == "$LLVM_TAG" ]]; then
+  LLVM_SOURCE_OK=1
+fi
+if [[ "$LLVM_SOURCE_OK" != 1 ]]; then
+  rm -rf "$LLVM_SRC"
+  mkdir -p "$(dirname "$LLVM_SRC")"
+  for attempt in 1 2 3 4; do
+    rm -rf "$LLVM_SRC"
+    log "LLVM checkout attempt $attempt/4"
+    if GIT_TERMINAL_PROMPT=0 git -c http.version=HTTP/1.1 \
+      -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 \
+      clone --filter=blob:none --depth 1 --single-branch \
+      --branch "$LLVM_TAG" --sparse \
+      https://github.com/llvm/llvm-project.git "$LLVM_SRC"; then
+      if git -C "$LLVM_SRC" sparse-checkout set llvm &&
+         [[ -f "$LLVM_SRC/llvm/CMakeLists.txt" ]] &&
+         [[ "$(git -C "$LLVM_SRC" describe --tags --exact-match 2>/dev/null || true)" == "$LLVM_TAG" ]]; then
+        LLVM_SOURCE_OK=1
+        break
+      fi
+    fi
+    rm -rf "$LLVM_SRC"
+    if (( attempt < 4 )); then
+      sleep $((attempt * 15))
+    fi
+  done
+fi
+[[ "$LLVM_SOURCE_OK" == 1 ]] || die "Unable to fetch pinned LLVM $LLVM_TAG after four sparse-clone attempts; stopping before the expensive LLVM/DXMT build."
+log "LLVM source ready: $(git -C "$LLVM_SRC" rev-parse --short HEAD)"
+
+# Madeira's helper incorrectly treats the presence of
+# __METAL_MEMORY_FLAGS_NONE__ as proof that the Metal atomic builtin accepts a
+# fifth argument. Xcode 16.4 defines that macro but its builtin still takes
+# four arguments. Keep the pinned DXMT four-argument call unchanged.
+SHADER_BUILD_SCRIPT="$MADEIRA/tools/build/build-shader-headers.sh"
+python3 - "$SHADER_BUILD_SCRIPT" <<'PY'
+from pathlib import Path
 import sys
 
-path = pathlib.Path(sys.argv[1])
+path = Path(sys.argv[1])
 source = path.read_text()
-legacy = """int
-get_next_index(threadgroup int *out_count) {
-  return __metal_atomic_fetch_add_explicit(out_count, 1, int(memory_order_relaxed), __METAL_MEMORY_SCOPE_THREADGROUP__);
-}"""
-fixed = """int
-get_next_index(threadgroup int *out_count) {
-  return atomic_fetch_add_explicit(reinterpret_cast<threadgroup atomic_int *>(out_count), 1, memory_order_relaxed);
-}"""
-if legacy in source:
-    path.write_text(source.replace(legacy, fixed, 1))
-elif fixed in source:
-    print("DXMT tessellation atomic compatibility patch already present")
-else:
-    raise SystemExit("ERROR: DXMT tessellation atomic helper has an unknown source form; refusing an unsafe patch.")
-print("DXMT tessellation atomic helper validated for Xcode 16 Metal")
+start = source.find("    new = (")
+end = source.find("\\n    p.write_text(s.replace(old, new, 1))", start)
+if start >= 0 and end >= 0:
+    source = source[:start] + "    new = old" + source[end:]
+elif "    new = old" not in source:
+    raise SystemExit("ERROR: unrecognized Madeira Metal shader compatibility block; refusing an unsafe patch.")
+path.write_text(source)
+print("DXMT Metal atomic compatibility: preserving the four-argument Xcode 16 builtin")
 PY
+
 
 log "Install checksum-pinned LLVM-MinGW toolchain"
 bash "$MADEIRA/tools/build/setup-llvm-mingw.sh"
