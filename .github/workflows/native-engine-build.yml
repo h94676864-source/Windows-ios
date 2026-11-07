@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: native-engine-build
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   native-engines:
