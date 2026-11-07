@@ -1,0 +1,40 @@
+name: Native Engine Build (FEX + Wine + DXMT)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/build-native-engines.sh"
+      - "Vendor/Madeira"
+      - "project.yml"
+      - ".github/workflows/native-engine-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-engine-build
+  cancel-in-progress: false
+
+jobs:
+  native-engines:
+    runs-on: macos-15-intel
+    timeout-minutes: 360
+    steps:
+      - name: Checkout app and pinned Madeira source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build FEX, Wine and DXMT native components
+        run: bash tools/build-native-engines.sh
+
+      - name: Upload compiled native engine sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinlatorIOS-Native-Engine-Sources
+          path: dist/WinlatorIOS-Native-Engine-Sources.tar.gz
+          if-no-files-found: error
+          retention-days: 14
