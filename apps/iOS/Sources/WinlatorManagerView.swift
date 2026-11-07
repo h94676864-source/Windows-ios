@@ -250,6 +250,7 @@ struct WinlatorManagerView: View {
 private struct ContainerSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var container: WinlatorContainer
+    @State private var prefixMessage: String?
     let onSave: (WinlatorContainer) -> Void
     private let versions = ["Windows 11", "Windows 10", "Windows 8.1", "Windows 7", "Windows XP"]
     private let presets = ["Compatibility", "Performance", "Stability", "Aggressive"]
@@ -269,6 +270,23 @@ private struct ContainerSettingsView: View {
                         Text("x64").tag("x64")
                     }
                 }
+                Section("Wine prefix") {
+                    LabeledContent("Prefix state", value: WinlatorWinePrefixStorage.status(for: container))
+                    Button("Prepare Wine prefix", systemImage: "folder.badge.gearshape") {
+                        do {
+                            prefixMessage = try WinlatorWinePrefixStorage.prepare(for: container)
+                        } catch {
+                            prefixMessage = error.localizedDescription
+                        }
+                    }
+                    Text("Creates the Windows C: directory layout and prefix metadata. Wine must run wineboot before this becomes a usable Windows prefix.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Wine runtime") {
+                    LabeledContent("Runtime", value: WinlatorWineRuntimeStorage.status().title)
+                    Text(WinlatorWineRuntimeStorage.status().detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Compatibility") {
                     Picker("CPU preset", selection: $container.box64Preset) {
                         ForEach(presets, id: \.self) { Text($0) }
@@ -284,6 +302,14 @@ private struct ContainerSettingsView: View {
             }
             .navigationTitle("Container settings")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Wine prefix", isPresented: Binding(
+                get: { prefixMessage != nil },
+                set: { if !$0 { prefixMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { prefixMessage = nil }
+            } message: {
+                Text(prefixMessage ?? "")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
