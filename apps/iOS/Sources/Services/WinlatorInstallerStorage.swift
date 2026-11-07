@@ -28,16 +28,38 @@ enum WinlatorInstallerStorage {
     static func importInstaller(from source: URL, for container: WinlatorContainer) throws -> WinlatorInstallerRecord {
         let ext = source.pathExtension.lowercased()
         guard ext == "exe" || ext == "msi" else { throw InstallerStorageError.unsupportedType }
+
         let hasAccess = source.startAccessingSecurityScopedResource()
         defer { if hasAccess { source.stopAccessingSecurityScopedResource() } }
+
+        let inspection = try WinlatorInstallerInspector.inspect(source)
+        guard inspection.isStructurallyValid else {
+            throw InstallerStorageError.invalidInstaller(inspection.details.joined(separator: " "))
+        }
+
         let folder = try installerDirectory(for: container)
+        for existing in try list(for: container) {
+            guard let existingInspection = try? WinlatorInstallerInspector.inspect(existing.fileURL) else { continue }
+            if existingInspection.sha256 == inspection.sha256 {
+                throw InstallerStorageError.duplicateContent(existing.fileURL.lastPathComponent)
+            }
+        }
+
         let destination = uniqueDestination(for: source.lastPathComponent, in: folder)
         try FileManager.default.copyItem(at: source, to: destination)
-        let values = try destination.resourceValues(forKeys: [.fileSizeKey])
-        return WinlatorInstallerRecord(
-            id: destination.lastPathComponent, name: destination.deletingPathExtension().lastPathComponent,
-            fileURL: destination, byteCount: Int64(values.fileSize ?? 0)
-        )
+        do {
+            try WinlatorInstallerIntegrityStore.record(
+                inspection: inspection, filename: destination.lastPathComponent, container: container
+            )
+            let values = try destination.resourceValues(forKeys: [.fileSizeKey])
+            return WinlatorInstallerRecord(
+                id: destination.lastPathComponent, name: destination.deletingPathExtension().lastPathComponent,
+                fileURL: destination, byteCount: Int64(values.fileSize ?? 0)
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
     }
 
     static func remove(_ record: WinlatorInstallerRecord, for container: WinlatorContainer) throws {
@@ -45,6 +67,7 @@ enum WinlatorInstallerStorage {
         let target = record.fileURL.standardizedFileURL
         guard target.deletingLastPathComponent() == folder else { throw InstallerStorageError.invalidLocation }
         try FileManager.default.removeItem(at: target)
+        try WinlatorInstallerIntegrityStore.remove(filename: target.lastPathComponent, container: container)
     }
 
     private static func installerDirectory(for container: WinlatorContainer) throws -> URL {
@@ -74,10 +97,19 @@ enum WinlatorInstallerStorage {
 private enum InstallerStorageError: LocalizedError {
     case unsupportedType
     case invalidLocation
+    case invalidInstaller(String)
+    case duplicateContent(String)
+
     var errorDescription: String? {
         switch self {
-        case .unsupportedType: return "Only .EXE and .MSI installers can be imported."
-        case .invalidLocation: return "The selected installer is outside this container's installer folder."
+        case .unsupportedType:
+            return "Only .EXE and .MSI installers can be imported."
+        case .invalidLocation:
+            return "The selected installer is outside this container's installer folder."
+        case .invalidInstaller(let detail):
+            return "Installer validation failed. \(detail)"
+        case .duplicateContent(let filename):
+            return "This installer has already been imported as \(filename)."
         }
     }
 }

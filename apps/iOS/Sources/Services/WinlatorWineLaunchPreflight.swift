@@ -33,6 +33,18 @@ enum WinlatorWineLaunchPreflight {
             valid = false
         }
 
+        do {
+            let isManaged = try WinlatorInstallerIntegrityStore.verifyIfManaged(executableURL, container: container)
+            if isManaged {
+                checks.append("✓ Container installer integrity manifest")
+            } else {
+                checks.append("— File is outside the managed container installer folder; manifest check skipped")
+            }
+        } catch {
+            checks.append("✗ Installer integrity: \(error.localizedDescription)")
+            valid = false
+        }
+
         let attributes = try? manager.attributesOfItem(atPath: executableURL.path)
         let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
         let regular = (attributes?[.type] as? FileAttributeType) == .typeRegular
