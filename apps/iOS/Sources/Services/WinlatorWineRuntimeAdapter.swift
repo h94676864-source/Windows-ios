@@ -10,18 +10,23 @@ struct WinlatorWineRuntimeStatus {
 /// - WinlatorWineRuntimeABI = "ios-arm64-inprocess"
 /// - exported uint32_t winlator_wine_abi_version(void)
 /// - exported int32_t winlator_wine_run_json(const char *utf8_json)
+/// - exported int32_t winlator_wine_runtime_self_test(void)
 ///
+/// The self-test must initialize/validate the in-process Wine core and return 0 only
+/// when the runtime is callable. Merely loading the ABI symbols is not execution readiness.
 /// The JSON request contains executablePath, prefixPath, workingDirectory and arguments.
 /// The framework must execute Wine in-process; iOS does not provide fork/exec for app binaries.
 enum WinlatorWineRuntimeAdapter {
     private static let expectedABI: UInt32 = 1
     private static let versionSymbol = "winlator_wine_abi_version"
     private static let runSymbol = "winlator_wine_run_json"
+    private static let selfTestSymbol = "winlator_wine_runtime_self_test"
     private static let lock = NSLock()
     private static var loadedHandle: UnsafeMutableRawPointer?
 
     private typealias VersionFunction = @convention(c) () -> UInt32
     private typealias RunFunction = @convention(c) (UnsafePointer<CChar>?) -> Int32
+    private typealias SelfTestFunction = @convention(c) () -> Int32
 
     private struct LaunchRequest: Encodable {
         let abiVersion: UInt32
@@ -34,8 +39,8 @@ enum WinlatorWineRuntimeAdapter {
     static func status() -> WinlatorWineRuntimeStatus {
         guard let symbols = resolve() else {
             return WinlatorWineRuntimeStatus(
-                title: "Not installed",
-                detail: "No compatible embedded WineRuntime.framework with the required ARM64 in-process ABI exports is available. The app has not bundled a Wine engine."
+                title: "Not installed or incompatible",
+                detail: "No compatible embedded WineRuntime.framework with ARM64 run, version and self-test exports is available. No Wine engine is bundled in this IPA."
             )
         }
         guard symbols.version == expectedABI else {
@@ -44,9 +49,17 @@ enum WinlatorWineRuntimeAdapter {
                 detail: "Wine adapter ABI \(symbols.version) is incompatible; expected ABI \(expectedABI)."
             )
         }
+        let selfTest = unsafeBitCast(symbols.selfTest, to: SelfTestFunction.self)
+        let result = selfTest()
+        guard result == 0 else {
+            return WinlatorWineRuntimeStatus(
+                title: "Runtime self-test failed",
+                detail: "WineRuntime.framework loaded, but its in-process self-test returned \(result). Windows launch remains disabled."
+            )
+        }
         return WinlatorWineRuntimeStatus(
-            title: "ARM64 runtime ready",
-            detail: "Embedded Wine framework loaded and both ABI entry points validated. Windows execution is available only when this framework supplies the documented in-process implementation."
+            title: "Runtime self-test passed",
+            detail: "Wine ARM64 framework, ABI version, launch entry point and runtime self-test passed. App-level EXE compatibility still requires device testing."
         )
     }
 
@@ -65,8 +78,10 @@ enum WinlatorWineRuntimeAdapter {
               executableSize > 0 else {
             return "Launch blocked: installer must be a non-empty regular file, not a symlink."
         }
-        guard let symbols = resolve(), symbols.version == expectedABI else {
-            return status().detail
+        let runtimeStatus = status()
+        guard runtimeStatus.title == "Runtime self-test passed",
+              let symbols = resolve(), symbols.version == expectedABI else {
+            return runtimeStatus.detail
         }
 
         do {
@@ -156,11 +171,12 @@ enum WinlatorWineRuntimeAdapter {
     }
 
     private static func resolveSymbols(in handle: UnsafeMutableRawPointer)
-        -> (version: UInt32, run: UnsafeMutableRawPointer)? {
+        -> (version: UInt32, run: UnsafeMutableRawPointer, selfTest: UnsafeMutableRawPointer)? {
         guard let versionPointer = dlsym(handle, versionSymbol),
-              let runPointer = dlsym(handle, runSymbol) else { return nil }
+              let runPointer = dlsym(handle, runSymbol),
+              let selfTestPointer = dlsym(handle, selfTestSymbol) else { return nil }
         let versionFunction = unsafeBitCast(versionPointer, to: VersionFunction.self)
-        return (versionFunction(), runPointer)
+        return (versionFunction(), runPointer, selfTestPointer)
     }
 
     private static func containsArm64MachO(at url: URL) -> Bool {

@@ -40,28 +40,27 @@ enum WinlatorRuntimeReadiness {
         }
 
         let wineStatus = WinlatorWineRuntimeAdapter.status()
-        let wineReady = wineStatus.title == "ARM64 runtime ready"
+        let wineReady = wineStatus.title == "Runtime self-test passed"
         let wine = WinlatorRuntimeReadinessItem(
             id: "wine", title: "Wine runtime", state: wineStatus.title,
             detail: wineStatus.detail, isReady: wineReady
         )
 
         let cpuStatus = WinlatorCPUTranslationRuntimeStorage.status()
-        let box64Ready = cpuStatus.box64.title == "ARM64 bundle detected"
-        let box86Ready = cpuStatus.box86.title == "ARM64 bundle detected"
+        let box64Ready = false
+        let box86Ready = false
         let cpu = WinlatorRuntimeReadinessItem(
             id: "cpu", title: "x86/x64 translation",
-            state: box64Ready && box86Ready ? "Frameworks detected" : "Not installed",
+            state: "Execution adapter not verified",
             detail: "Box64: \(cpuStatus.box64.title). Box86: \(cpuStatus.box86.title). Detection alone does not enable guest instruction translation.",
             isReady: box64Ready && box86Ready
         )
 
         let graphicsStatus = WinlatorGraphicsRuntimeStorage.status()
-        let graphicsReady = graphicsStatus.metal.title == "Available" &&
-            graphicsStatus.vulkan.title == "ARM64 bundle detected"
+        let graphicsReady = false
         let graphics = WinlatorRuntimeReadinessItem(
             id: "graphics", title: "Graphics translation",
-            state: graphicsReady ? "Components detected" : "Incomplete",
+            state: "DirectX translation not integrated",
             detail: "Metal: \(graphicsStatus.metal.title). Vulkan: \(graphicsStatus.vulkan.title). A callable DirectX translation adapter is still required.",
             isReady: graphicsReady
         )
