@@ -396,6 +396,7 @@ private struct ContainerSettingsView: View {
     @State var container: WinlatorContainer
     @State private var prefixMessage: String?
     @State private var rootFSMessage: String?
+    @State private var showingInstallerManager = false
     let onSave: (WinlatorContainer) -> Void
     private let versions = ["Windows 11", "Windows 10", "Windows 8.1", "Windows 7", "Windows XP"]
     private let presets = ["Compatibility", "Performance", "Stability", "Aggressive"]
@@ -416,13 +417,30 @@ private struct ContainerSettingsView: View {
                     }
                 }
                 Section("Linux RootFS") {
-                    let report = WinlatorRootFSCompatibilityChecker.inspect(for: container)
+                    let report = WinlatorRootFSDeepValidator.inspect(for: container)
                     LabeledContent("Compatibility", value: report.title)
                     Button("Check RootFS compatibility", systemImage: "checkmark.shield") {
                         rootFSMessage = report.message
                     }
-                    Text("Checks the imported filesystem layout, shell and ARM64 ELF format. This does not execute Linux programs.")
+                    Text("Checks ARM64 ELF shell, PT_INTERP dynamic linker and core C runtime libraries. This does not execute Linux programs.")
                         .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Container installers") {
+                    Button("Manage EXE / MSI installers", systemImage: "shippingbox") {
+                        showingInstallerManager = true
+                    }
+                    Text("Importers are copied into this container's C: / Installers folder and remain separate from other containers.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Per-container runtime dashboard") {
+                    let dashboard = WinlatorRuntimeReadiness.inspect(for: container)
+                    LabeledContent("Ready components", value: "\(dashboard.readyCount)/\(dashboard.items.count)")
+                    ForEach(dashboard.items) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            LabeledContent(item.title, value: item.state)
+                            Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 Section("Wine prefix") {
                     LabeledContent("Prefix state", value: WinlatorWinePrefixStorage.status(for: container))
@@ -474,6 +492,9 @@ private struct ContainerSettingsView: View {
                     Label("These are saved profiles. They take effect only when an iOS-compatible execution engine is available.", systemImage: "info.circle")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+            }
+            .sheet(isPresented: $showingInstallerManager) {
+                NavigationStack { WinlatorInstallerManagerView(container: container) }
             }
             .navigationTitle("Container settings")
             .navigationBarTitleDisplayMode(.inline)
