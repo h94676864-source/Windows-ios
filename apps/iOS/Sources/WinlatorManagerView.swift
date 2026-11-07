@@ -448,6 +448,19 @@ private struct ContainerSettingsView: View {
                     Text("Importers are copied into this container's C: / Installers folder and remain separate from other containers.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("Device and container environment") {
+                    let environment = WinlatorRuntimeEnvironment.inspect(for: container)
+                    LabeledContent("Healthy checks", value: "\\(environment.healthyCount)/\\(environment.items.count)")
+                    ForEach(environment.items) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            LabeledContent(item.title, value: item.value)
+                            Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    ShareLink(item: environment.summary) {
+                        Label("Export environment report", systemImage: "square.and.arrow.up")
+                    }
+                }
                 Section("Per-container runtime dashboard") {
                     let dashboard = WinlatorRuntimeReadiness.inspect(for: container)
                     LabeledContent("Ready components", value: "\(dashboard.readyCount)/\(dashboard.items.count)")
