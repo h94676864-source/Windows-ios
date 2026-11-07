@@ -405,6 +405,15 @@ private struct ContainerSettingsView: View {
                         Text("x64").tag("x64")
                     }
                 }
+                Section("Linux RootFS") {
+                    let report = WinlatorRootFSCompatibilityChecker.inspect(for: container)
+                    LabeledContent("Compatibility", value: report.title)
+                    Button("Check RootFS compatibility", systemImage: "checkmark.shield") {
+                        rootFSMessage = report.message
+                    }
+                    Text("Checks the imported filesystem layout, shell and ARM64 ELF format. This does not execute Linux programs.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Wine prefix") {
                     LabeledContent("Prefix state", value: WinlatorWinePrefixStorage.status(for: container))
                     Button("Prepare Wine prefix", systemImage: "folder.badge.gearshape") {
