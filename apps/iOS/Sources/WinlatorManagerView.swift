@@ -450,7 +450,7 @@ private struct ContainerSettingsView: View {
                 }
                 Section("Device and container environment") {
                     let environment = WinlatorRuntimeEnvironment.inspect(for: container)
-                    LabeledContent("Healthy checks", value: "\\(environment.healthyCount)/\\(environment.items.count)")
+                    LabeledContent("Healthy checks", value: "\(environment.healthyCount)/\(environment.items.count)")
                     ForEach(environment.items) { item in
                         VStack(alignment: .leading, spacing: 3) {
                             LabeledContent(item.title, value: item.value)

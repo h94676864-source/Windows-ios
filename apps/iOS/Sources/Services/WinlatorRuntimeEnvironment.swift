@@ -11,14 +11,14 @@ struct WinlatorEnvironmentItem: Identifiable {
 struct WinlatorEnvironmentReport {
     let items: [WinlatorEnvironmentItem]
 
-    var healthyCount: Int { items.filter(\\.isHealthy).count }
+    var healthyCount: Int { items.filter(\.isHealthy).count }
 
     var summary: String {
         let lines = items.map {
-            "\\($0.isHealthy ? "✓" : "⚠") \\($0.title): \\($0.value) — \\($0.detail)"
+            "\($0.isHealthy ? "✓" : "⚠") \($0.title): \($0.value) — \($0.detail)"
         }
-        return "Device / container environment: \\(healthyCount)/\\(items.count) checks healthy\\n"
-            + lines.joined(separator: "\\n")
+        return "Device / container environment: \(healthyCount)/\(items.count) checks healthy\n"
+            + lines.joined(separator: "\n")
     }
 }
 
@@ -30,7 +30,7 @@ enum WinlatorRuntimeEnvironment {
         var items: [WinlatorEnvironmentItem] = []
 
         let version = process.operatingSystemVersion
-        let versionString = "\\(version.majorVersion).\\(version.minorVersion).\\(version.patchVersion)"
+        let versionString = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
         let supportedOS = version.majorVersion > 18 ||
             (version.majorVersion == 18 && version.minorVersion >= 5)
         items.append(WinlatorEnvironmentItem(
@@ -104,7 +104,7 @@ enum WinlatorRuntimeEnvironment {
                 appropriateFor: nil, create: true
             )
             let root = support.appendingPathComponent(
-                "Winlator/Containers/\\(container.id.uuidString)", isDirectory: true
+                "Winlator/Containers/\(container.id.uuidString)", isDirectory: true
             ).standardizedFileURL
             let values = try root.resourceValues(forKeys: [.isDirectoryKey])
             guard values.isDirectory == true else {
@@ -123,7 +123,7 @@ enum WinlatorRuntimeEnvironment {
             return WinlatorEnvironmentItem(
                 id: "container-storage", title: "Container storage",
                 value: sizeText,
-                detail: "Container footprint; device available storage: \\(freeText).",
+                detail: "Container footprint; device available storage: \(freeText).",
                 isHealthy: freeBytes < 0 || freeBytes >= 512 * 1_024 * 1_024
             )
         } catch {
