@@ -34,26 +34,34 @@ enum WinlatorContainerBackupStorage {
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )
-        return try urls.compactMap { url in
-            guard url.pathExtension == "winlatorbackup" else { return nil }
-            let manifestURL = url.appendingPathComponent("backup-manifest.json")
-            guard manager.fileExists(atPath: manifestURL.path) else { return nil }
-            let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
-            guard manifest.version == 1,
-                  manifest.backupID == url.deletingPathExtension().lastPathComponent,
-                  UUID(uuidString: manifest.backupID) != nil,
-                  UUID(uuidString: manifest.sourceContainerID) != nil else {
-                throw BackupError.invalidManifest
+        var backups: [Backup] = []
+        for url in urls where url.pathExtension == "winlatorbackup" {
+            do {
+                let folderValues = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard folderValues.isDirectory == true, folderValues.isSymbolicLink != true else { continue }
+                let manifestURL = url.appendingPathComponent("backup-manifest.json")
+                let manifestValues = try manifestURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard manifestValues.isRegularFile == true, manifestValues.isSymbolicLink != true else { continue }
+                let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
+                guard manifest.version == 1,
+                      manifest.backupID == url.deletingPathExtension().lastPathComponent,
+                      UUID(uuidString: manifest.backupID) != nil,
+                      UUID(uuidString: manifest.sourceContainerID) != nil else { continue }
+                try validateRecords(manifest.files)
+                guard manifest.sourceContainerID == container.id.uuidString else { continue }
+                backups.append(Backup(
+                    id: manifest.backupID,
+                    containerName: manifest.containerName,
+                    createdAt: manifest.createdAt,
+                    fileCount: manifest.files.count,
+                    sourceContainerID: manifest.sourceContainerID
+                ))
+            } catch {
+                // Ignore an invalid backup entry without hiding other valid backups.
+                continue
             }
-            return Backup(
-                id: manifest.backupID,
-                containerName: manifest.containerName,
-                createdAt: manifest.createdAt,
-                fileCount: manifest.files.count,
-                sourceContainerID: manifest.sourceContainerID
-            )
-        }.filter { $0.sourceContainerID == container.id.uuidString }
-            .sorted { $0.createdAt > $1.createdAt }
+        }
+        return backups.sorted { $0.createdAt > $1.createdAt }
     }
 
     @discardableResult

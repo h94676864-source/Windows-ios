@@ -48,8 +48,11 @@ enum WinlatorRootFSDeepValidator {
             checks.append("✓ ELF PT_INTERP: \(interpreter)")
             let relative = interpreter.hasPrefix("/") ? String(interpreter.dropFirst()) : interpreter
             let linker = root.appendingPathComponent(relative).standardizedFileURL
-            guard linker.path.hasPrefix(root.path + "/"), manager.isExecutableFile(atPath: linker.path),
-                  elfMachine(linker) == 183 else {
+            let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
+            let resolvedLinker = linker.resolvingSymlinksInPath().standardizedFileURL
+            guard resolvedLinker.path.hasPrefix(resolvedRoot.path + "/"),
+                  manager.isExecutableFile(atPath: resolvedLinker.path),
+                  elfMachine(resolvedLinker) == 183 else {
                 checks.append("✗ Dynamic linker missing, non-executable or not AArch64: \(interpreter)")
                 return WinlatorRootFSDeepReport(checks: checks, isReady: false)
             }
