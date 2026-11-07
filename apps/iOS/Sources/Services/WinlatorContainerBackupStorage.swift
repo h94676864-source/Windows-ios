@@ -88,7 +88,7 @@ enum WinlatorContainerBackupStorage {
         try data.write(to: staging.appendingPathComponent("backup-manifest.json"), options: .atomic)
         try manager.moveItem(at: staging, to: destination)
         committed = true
-        return Backup(id: backupID, containerName: container.name, createdAt: manifest.createdAt, fileCount: records.count)
+        return Backup(id: backupID, containerName: container.name, createdAt: manifest.createdAt, fileCount: records.count, sourceContainerID: container.id.uuidString)
     }
 
     static func restore(_ backup: Backup, to container: WinlatorContainer) throws {
@@ -174,7 +174,7 @@ enum WinlatorContainerBackupStorage {
             }
             guard !record.path.isEmpty,
                   !record.path.hasPrefix("/"),
-                  !record.path.contains("\\\\"),
+                  !record.path.contains("\\"),
                   !components.isEmpty,
                   components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
                   record.byteCount >= 0,
