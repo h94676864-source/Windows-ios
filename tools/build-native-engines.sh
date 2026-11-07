@@ -59,7 +59,15 @@ bash "$MADEIRA/build/win32u-unix/build.sh"
 
 log "Build LLVM support and Metal shader headers for DXMT"
 "$MADEIRA/tools/build/build-llvm-ios.sh"
-xcodebuild -downloadComponent MetalToolchain
+# Xcode 26 exposes -downloadComponent for the separately shipped MetalToolchain.
+# Xcode 16 (the macos-15 runner default) already ships the Metal compiler in its
+# selected developer directory and rejects that newer xcodebuild option.
+if xcodebuild -help 2>&1 | grep -q -- '-downloadComponent'; then
+  xcodebuild -downloadComponent MetalToolchain
+else
+  log "Xcode has no -downloadComponent option; using its bundled Metal toolchain"
+  xcrun --find metal >/dev/null || die "Metal compiler is unavailable in the selected Xcode toolchain."
+fi
 "$MADEIRA/tools/build/build-shader-headers.sh"
 bash "$MADEIRA/build/dxmt-ios/build.sh"
 
