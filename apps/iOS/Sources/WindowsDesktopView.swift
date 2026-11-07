@@ -48,6 +48,9 @@ struct WindowsDesktopView: View {
     @State private var showingStart = false
     @State private var selectedApp: DesktopApp?
     @State private var showingConnectInfo = false
+    @State private var showingTouchControls = false
+    @State private var showingKeyboard = false
+    @State private var lastTouchAction = ""
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
