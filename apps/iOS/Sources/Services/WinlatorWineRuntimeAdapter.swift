@@ -128,7 +128,7 @@ enum WinlatorWineRuntimeAdapter {
         }
     }
 
-    private static func resolve() -> (version: UInt32, run: UnsafeMutableRawPointer)? {
+    private static func resolve() -> (version: UInt32, run: UnsafeMutableRawPointer, selfTest: UnsafeMutableRawPointer)? {
         lock.lock()
         defer { lock.unlock() }
 
