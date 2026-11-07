@@ -51,7 +51,7 @@ struct WinlatorManagerView: View {
                         }
                     },
                     onLaunch: { app, container in
-                        launchMessage = WinlatorWineExecutionBridge.preflight(
+                        launchMessage = WinlatorWineExecutionBridge.launch(
                             executableURL: URL(fileURLWithPath: app.localPath), container: container
                         )
                     })
