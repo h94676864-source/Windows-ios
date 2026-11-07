@@ -135,7 +135,11 @@ else
   xcrun --find metal >/dev/null || die "Metal compiler is unavailable in the selected Xcode toolchain."
 fi
 "$MADEIRA/tools/build/build-shader-headers.sh"
-bash "$MADEIRA/build/dxmt-ios/build.sh"
+if ! bash "$MADEIRA/build/dxmt-ios/build.sh"; then
+  log "DXMT compiler diagnostics (non-empty .err files)"
+  find "$MADEIRA/build/dxmt-ios/obj" -type f -name '*.err' -size +0c -print -exec cat {} \; || true
+  die "DXMT iOS build failed; compiler diagnostics are printed above."
+fi
 
 log "Build Wine ARM64EC PE runtime"
 bash "$MADEIRA/build/wine-pe/build-ntdll.sh"
