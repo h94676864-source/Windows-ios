@@ -390,6 +390,18 @@ private struct ContainerSettingsView: View {
                     Text(translation.box86.detail)
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("Graphics runtime") {
+                    let graphics = WinlatorGraphicsRuntimeStorage.status()
+                    LabeledContent("Metal GPU", value: graphics.metal.title)
+                    Text(graphics.metal.detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                    LabeledContent("Vulkan / MoltenVK", value: graphics.vulkan.title)
+                    Text(graphics.vulkan.detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                    LabeledContent("DirectX translation bridge", value: graphics.bridge.title)
+                    Text(graphics.bridge.detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Compatibility") {
                     Picker("CPU preset", selection: $container.box64Preset) {
                         ForEach(presets, id: \.self) { Text($0) }
