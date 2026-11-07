@@ -27,7 +27,7 @@ enum WinlatorRootFSRuntimeLoader {
         // Standard Linux images commonly use /bin -> /usr/bin. Permit internal
         // symlinks, but reject any link whose resolved destination leaves RootFS.
         let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
-        guard isSameOrDescendant(resolvedRoot, of: support) == false,
+        guard isSameOrDescendant(resolvedRoot, of: support),
               resolvedRoot.path.hasPrefix(support.path + "/") else {
             throw RootFSRuntimeError.unsafeRootFS
         }
