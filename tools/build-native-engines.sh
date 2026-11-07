@@ -34,6 +34,33 @@ git -C "$MADEIRA" submodule update --init --recursive --depth 1
 git -C "$MADEIRA" submodule status --recursive
 [[ -x "$MADEIRA/wine/configure" ]] || die "Wine submodule checkout is incomplete: expected Vendor/Madeira/wine/configure."
 
+# DXMT's pinned revision uses a legacy Metal atomic builtin spelling that
+# expands to a five-argument intrinsic on the Xcode 16.4 Metal compiler.
+# Use the upstream atomic<T> API form, which is compatible with this SDK.
+DXMT_TESSELLATION="$MADEIRA/dxmt/src/airconv/shaders/air_tessellation.metal"
+python3 - "$DXMT_TESSELLATION" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+source = path.read_text()
+legacy = """int
+get_next_index(threadgroup int *out_count) {
+  return __metal_atomic_fetch_add_explicit(out_count, 1, int(memory_order_relaxed), __METAL_MEMORY_SCOPE_THREADGROUP__);
+}"""
+fixed = """int
+get_next_index(threadgroup int *out_count) {
+  return atomic_fetch_add_explicit(reinterpret_cast<threadgroup atomic_int *>(out_count), 1, memory_order_relaxed);
+}"""
+if legacy in source:
+    path.write_text(source.replace(legacy, fixed, 1))
+elif fixed in source:
+    print("DXMT tessellation atomic compatibility patch already present")
+else:
+    raise SystemExit("ERROR: DXMT tessellation atomic helper has an unknown source form; refusing an unsafe patch.")
+print("DXMT tessellation atomic helper validated for Xcode 16 Metal")
+PY
+
 log "Install checksum-pinned LLVM-MinGW toolchain"
 bash "$MADEIRA/tools/build/setup-llvm-mingw.sh"
 
