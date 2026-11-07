@@ -64,7 +64,7 @@ enum WinlatorInstallerIntegrityStore {
             let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
             guard !filename.isEmpty,
                   URL(fileURLWithPath: filename).lastPathComponent == filename,
-                  !filename.contains("/"), !filename.contains("\\\\"),
+                  !filename.contains("/"), !filename.contains("\\"),
                   ext == "exe" || ext == "msi",
                   entry.byteCount > 0,
                   entry.sha256.count == 64,

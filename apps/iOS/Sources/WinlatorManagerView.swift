@@ -413,6 +413,9 @@ private struct ContainerSettingsView: View {
     @State private var prefixMessage: String?
     @State private var rootFSMessage: String?
     @State private var showingInstallerManager = false
+    @State private var backups: [WinlatorContainerBackupStorage.Backup] = []
+    @State private var backupMessage: String?
+    @State private var backupToRestore: WinlatorContainerBackupStorage.Backup?
     let onSave: (WinlatorContainer) -> Void
     private let versions = ["Windows 11", "Windows 10", "Windows 8.1", "Windows 7", "Windows XP"]
     private let presets = ["Compatibility", "Performance", "Stability", "Aggressive"]
@@ -446,6 +449,34 @@ private struct ContainerSettingsView: View {
                         showingInstallerManager = true
                     }
                     Text("Importers are copied into this container's C: / Installers folder and remain separate from other containers.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Container backup and restore") {
+                    Button("Create verified backup", systemImage: "externaldrive.badge.plus") {
+                        createContainerBackup()
+                    }
+                    if backups.isEmpty {
+                        Text("No local backups yet. Create a backup before changing container files.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(backups) { backup in
+                            VStack(alignment: .leading, spacing: 7) {
+                                HStack {
+                                    Text(backup.containerName).font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    Text("\(backup.fileCount) files").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Text(backup.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Button("Verify and restore", systemImage: "arrow.clockwise") {
+                                    backupToRestore = backup
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    Text("Backups are stored locally in Documents/WinlatorBackups. Restore verifies every file's size and SHA-256 before replacing container data.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Device and container environment") {
@@ -525,6 +556,24 @@ private struct ContainerSettingsView: View {
             .sheet(isPresented: $showingInstallerManager) {
                 NavigationStack { WinlatorInstallerManagerView(container: container) }
             }
+            .onAppear(perform: refreshContainerBackups)
+            .confirmationDialog("Restore this container backup?", isPresented: Binding(
+                get: { backupToRestore != nil },
+                set: { if !$0 { backupToRestore = nil } }
+            ), titleVisibility: .visible) {
+                Button("Restore backup", role: .destructive) { restoreSelectedBackup() }
+                Button("Cancel", role: .cancel) { backupToRestore = nil }
+            } message: {
+                Text("The current container folder will be replaced only after the backup passes SHA-256 verification.")
+            }
+            .alert("Container backup", isPresented: Binding(
+                get: { backupMessage != nil },
+                set: { if !$0 { backupMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { backupMessage = nil }
+            } message: {
+                Text(backupMessage ?? "")
+            }
             .navigationTitle("Container settings")
             .navigationBarTitleDisplayMode(.inline)
             .alert("Wine prefix", isPresented: Binding(
@@ -549,6 +598,35 @@ private struct ContainerSettingsView: View {
                     Button("Save") { onSave(container); dismiss() }
                 }
             }
+        }
+    }
+
+    private func refreshContainerBackups() {
+        do {
+            backups = try WinlatorContainerBackupStorage.list()
+        } catch {
+            backupMessage = "Could not read backups: " + error.localizedDescription
+        }
+    }
+
+    private func createContainerBackup() {
+        do {
+            let backup = try WinlatorContainerBackupStorage.create(for: container)
+            refreshContainerBackups()
+            backupMessage = "Backup created and SHA-256 indexed: \(backup.fileCount) files."
+        } catch {
+            backupMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreSelectedBackup() {
+        guard let backup = backupToRestore else { return }
+        backupToRestore = nil
+        do {
+            try WinlatorContainerBackupStorage.restore(backup, to: container)
+            backupMessage = "Backup verified and restored successfully."
+        } catch {
+            backupMessage = error.localizedDescription
         }
     }
 }
