@@ -24,6 +24,7 @@ struct WinlatorManagerView: View {
     @State private var showingNewContainer = false
     @State private var showingImporter = false
     @State private var showingRuntimeInfo = false
+    @State private var runtimeReadinessMessage = ""
     @State private var selectedContainer: WinlatorContainer?
     @State private var selectedShortcut: WinlatorShortcut?
     @State private var launchMessage: String?
@@ -44,6 +45,14 @@ struct WinlatorManagerView: View {
                     Menu {
                         Button("Create container", systemImage: "plus") { showingNewContainer = true }
                         Button("Import Windows EXE", systemImage: "square.and.arrow.down") { showingImporter = true }
+                        Button("Runtime diagnostics", systemImage: "stethoscope") {
+                            if let container = containers.first {
+                                runtimeReadinessMessage = WinlatorRuntimeReadiness.inspect(for: container).summary
+                            } else {
+                                runtimeReadinessMessage = "Create a container first to inspect runtime readiness."
+                            }
+                            showingRuntimeInfo = true
+                        }
                     } label: { Image(systemName: "plus.circle.fill") }
                 }
             }
@@ -135,7 +144,7 @@ struct WinlatorManagerView: View {
         launchAlertView.alert("Runtime information", isPresented: $showingRuntimeInfo) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
+            Text(runtimeReadinessMessage)
         }
     }
 
