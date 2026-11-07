@@ -76,7 +76,7 @@ struct WinlatorManagerView: View {
             } message: {
                 Text("The installer is imported and listed, but launching Windows binaries requires a compatible Wine and CPU translation runtime. That execution engine is not available in this iOS build.")
             }
-            .alert("Import failed", isPresented: Binding(
+            .alert("Import / RootFS status", isPresented: Binding(
                 get: { importError != nil },
                 set: { if !$0 { importError = nil } }
             )) {
