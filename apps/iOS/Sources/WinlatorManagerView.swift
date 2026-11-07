@@ -61,6 +61,10 @@ struct WinlatorManagerView: View {
                     }
                 },
                 onLaunch: { app, container in
+                    guard let container else {
+                        launchMessage = "Select a container before launching this installer."
+                        return
+                    }
                     launchMessage = WinlatorWineExecutionBridge.launch(
                         executableURL: URL(fileURLWithPath: app.localPath),
                         container: container
