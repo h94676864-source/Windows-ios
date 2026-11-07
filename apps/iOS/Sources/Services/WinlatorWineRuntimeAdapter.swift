@@ -113,7 +113,13 @@ enum WinlatorWineRuntimeAdapter {
             return nil
         }
         let binaryURL = frameworkURL.appendingPathComponent(executable)
-        guard containsArm64MachO(at: binaryURL),
+        let frameworkValues = try? frameworkURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+        let binaryValues = try? binaryURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
+        guard frameworkValues?.isDirectory == true,
+              frameworkValues?.isSymbolicLink != true,
+              binaryValues?.isRegularFile == true,
+              binaryValues?.isSymbolicLink != true,
+              containsArm64MachO(at: binaryURL),
               let handle = dlopen(binaryURL.path, RTLD_NOW | RTLD_LOCAL) else {
             return nil
         }

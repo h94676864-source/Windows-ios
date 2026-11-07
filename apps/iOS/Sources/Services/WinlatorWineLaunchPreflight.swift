@@ -45,10 +45,12 @@ enum WinlatorWineLaunchPreflight {
             valid = false
         }
 
+        let executableValues = try? executableURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
         let attributes = try? manager.attributesOfItem(atPath: executableURL.path)
         let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
-        let regular = (attributes?[.type] as? FileAttributeType) == .typeRegular
-        let filePresent = manager.fileExists(atPath: executableURL.path) && regular && size > 0
+        let regular = executableValues?.isRegularFile == true
+        let notSymlink = executableValues?.isSymbolicLink != true
+        let filePresent = manager.fileExists(atPath: executableURL.path) && regular && notSymlink && size > 0
         checks.append("\(filePresent ? "✓" : "✗") Installer exists, is a regular file and is not empty")
         valid = valid && filePresent
 
@@ -59,14 +61,17 @@ enum WinlatorWineLaunchPreflight {
                 "Winlator/Containers/\(container.id.uuidString)", isDirectory: true
             )
             let prefix = root.appendingPathComponent("prefix", isDirectory: true)
-            var isDirectory: ObjCBool = false
-            let prefixReady = manager.fileExists(atPath: prefix.path, isDirectory: &isDirectory) && isDirectory.boolValue
+            let rootValues = try? root.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            let prefixValues = try? prefix.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            let rootReady = rootValues?.isDirectory == true && rootValues?.isSymbolicLink != true
+            let prefixReady = rootReady && prefixValues?.isDirectory == true && prefixValues?.isSymbolicLink != true
             checks.append("\(prefixReady ? "✓" : "✗") Container Wine prefix directory")
             valid = valid && prefixReady
 
             if prefixReady {
                 let metadataURL = prefix.appendingPathComponent("winlator-prefix.json")
-                if manager.fileExists(atPath: metadataURL.path) {
+                let metadataValues = try? metadataURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
+                if metadataValues?.isRegularFile == true && metadataValues?.isSymbolicLink != true {
                     let data = try Data(contentsOf: metadataURL)
                     guard let metadata = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                         checks.append("✗ Prefix metadata is invalid")
@@ -76,7 +81,7 @@ enum WinlatorWineLaunchPreflight {
                     checks.append("\(matches ? "✓" : "✗") Prefix belongs to selected container")
                     valid = valid && matches
                 } else {
-                    checks.append("✗ Prefix metadata is absent; prepare the prefix first")
+                    checks.append("✗ Prefix metadata is missing, not a regular file, or is a symlink")
                     valid = false
                 }
             }
