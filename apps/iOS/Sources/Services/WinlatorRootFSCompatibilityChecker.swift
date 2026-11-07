@@ -82,7 +82,7 @@ enum WinlatorRootFSCompatibilityChecker {
     private static func isAArch64ELF(at url: URL) -> Bool {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
         defer { try? handle.close() }
-        guard let header = try? handle.read(upToCount: 20), let header, header.count >= 20 else {
+        guard let header = try? handle.read(upToCount: 20), header.count >= 20 else {
             return false
         }
         let bytes = [UInt8](header)

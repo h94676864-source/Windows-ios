@@ -34,7 +34,7 @@ enum WinlatorWinePrefixStorage {
 
         let metadataURL = prefix.appendingPathComponent("winlator-prefix.json")
         var metadata: [String: Any] = [:]
-        let prefixAlreadyExisted = manager.contentsOfDirectory(atPath: prefix.path).isEmpty == false
+        let prefixAlreadyExisted = try manager.contentsOfDirectory(atPath: prefix.path).isEmpty == false
 
         if manager.fileExists(atPath: metadataURL.path) {
             let data = try Data(contentsOf: metadataURL)

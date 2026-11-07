@@ -386,6 +386,7 @@ private struct ContainerSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var container: WinlatorContainer
     @State private var prefixMessage: String?
+    @State private var rootFSMessage: String?
     let onSave: (WinlatorContainer) -> Void
     private let versions = ["Windows 11", "Windows 10", "Windows 8.1", "Windows 7", "Windows XP"]
     private let presets = ["Compatibility", "Performance", "Stability", "Aggressive"]
@@ -474,6 +475,14 @@ private struct ContainerSettingsView: View {
                 Button("OK", role: .cancel) { prefixMessage = nil }
             } message: {
                 Text(prefixMessage ?? "")
+            }
+            .alert("RootFS compatibility", isPresented: Binding(
+                get: { rootFSMessage != nil },
+                set: { if !$0 { rootFSMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { rootFSMessage = nil }
+            } message: {
+                Text(rootFSMessage ?? "")
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
