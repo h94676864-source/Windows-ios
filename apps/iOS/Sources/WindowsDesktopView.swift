@@ -51,6 +51,9 @@ struct WindowsDesktopView: View {
     @State private var showingTouchControls = false
     @State private var showingKeyboard = false
     @State private var lastTouchAction = ""
+    @State private var showingMousePad = false
+    @State private var showingGamepadStatus = false
+    @StateObject private var gameControllerMonitor = WinlatorGameControllerMonitor()
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -140,6 +143,35 @@ struct WindowsDesktopView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Desktop").font(.headline)
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingMousePad.toggle()
+                    showingGamepadStatus = false
+                } label: { Image(systemName: "computermouse") }
+                .accessibilityLabel("Toggle mouse pad")
+                Button {
+                    gameControllerMonitor.refreshControllers()
+                    showingGamepadStatus.toggle()
+                    showingMousePad = false
+                } label: { Image(systemName: "gamecontroller") }
+                .accessibilityLabel("Gamepad status")
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if showingMousePad {
+                WinlatorMousePadView { _ in }
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 70)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if showingGamepadStatus {
+                WinlatorGamepadStatusView(monitor: gameControllerMonitor)
+                    .padding(12)
+                    .frame(maxWidth: 320)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.bottom, 62)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .preferredColorScheme(.dark)
