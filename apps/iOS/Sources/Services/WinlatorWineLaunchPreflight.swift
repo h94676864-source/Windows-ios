@@ -99,7 +99,7 @@ enum WinlatorWineLaunchPreflight {
         }
 
         let runtime = WinlatorWineRuntimeAdapter.status()
-        let runtimeReady = runtime.title == "ARM64 runtime ready"
+        let runtimeReady = runtime.title == "Runtime self-test passed"
         checks.append("\(runtimeReady ? "✓" : "✗") Wine runtime: \(runtime.title)")
         valid = valid && runtimeReady
 
