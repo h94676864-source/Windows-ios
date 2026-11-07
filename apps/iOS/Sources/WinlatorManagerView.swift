@@ -468,10 +468,16 @@ private struct ContainerSettingsView: View {
                                 }
                                 Text(backup.createdAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption).foregroundStyle(.secondary)
-                                Button("Verify and restore", systemImage: "arrow.clockwise") {
-                                    backupToRestore = backup
+                                HStack {
+                                    Button("Verify and restore", systemImage: "arrow.clockwise") {
+                                        backupToRestore = backup
+                                    }
+                                    .buttonStyle(.bordered)
+                                    Button("Delete", systemImage: "trash", role: .destructive) {
+                                        deleteContainerBackup(backup)
+                                    }
+                                    .buttonStyle(.bordered)
                                 }
-                                .buttonStyle(.bordered)
                             }
                             .padding(.vertical, 4)
                         }
@@ -603,7 +609,7 @@ private struct ContainerSettingsView: View {
 
     private func refreshContainerBackups() {
         do {
-            backups = try WinlatorContainerBackupStorage.list()
+            backups = try WinlatorContainerBackupStorage.list(for: container)
         } catch {
             backupMessage = "Could not read backups: " + error.localizedDescription
         }
@@ -614,6 +620,16 @@ private struct ContainerSettingsView: View {
             let backup = try WinlatorContainerBackupStorage.create(for: container)
             refreshContainerBackups()
             backupMessage = "Backup created and SHA-256 indexed: \(backup.fileCount) files."
+        } catch {
+            backupMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteContainerBackup(_ backup: WinlatorContainerBackupStorage.Backup) {
+        do {
+            try WinlatorContainerBackupStorage.delete(backup)
+            refreshContainerBackups()
+            backupMessage = "Backup deleted."
         } catch {
             backupMessage = error.localizedDescription
         }

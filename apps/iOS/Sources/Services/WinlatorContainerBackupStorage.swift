@@ -7,6 +7,7 @@ enum WinlatorContainerBackupStorage {
         let containerName: String
         let createdAt: Date
         let fileCount: Int
+        let sourceContainerID: String
     }
 
     private struct Manifest: Codable {
@@ -26,7 +27,7 @@ enum WinlatorContainerBackupStorage {
 
     private static var manager: FileManager { .default }
 
-    static func list() throws -> [Backup] {
+    static func list(for container: WinlatorContainer) throws -> [Backup] {
         let root = try backupsRoot()
         let urls = try manager.contentsOfDirectory(
             at: root,
@@ -38,16 +39,21 @@ enum WinlatorContainerBackupStorage {
             let manifestURL = url.appendingPathComponent("backup-manifest.json")
             guard manager.fileExists(atPath: manifestURL.path) else { return nil }
             let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
-            guard manifest.version == 1, manifest.backupID == url.deletingPathExtension().lastPathComponent else {
+            guard manifest.version == 1,
+                  manifest.backupID == url.deletingPathExtension().lastPathComponent,
+                  UUID(uuidString: manifest.backupID) != nil,
+                  UUID(uuidString: manifest.sourceContainerID) != nil else {
                 throw BackupError.invalidManifest
             }
             return Backup(
                 id: manifest.backupID,
                 containerName: manifest.containerName,
                 createdAt: manifest.createdAt,
-                fileCount: manifest.files.count
+                fileCount: manifest.files.count,
+                sourceContainerID: manifest.sourceContainerID
             )
-        }.sorted { $0.createdAt > $1.createdAt }
+        }.filter { $0.sourceContainerID == container.id.uuidString }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     @discardableResult
@@ -91,6 +97,9 @@ enum WinlatorContainerBackupStorage {
         let manifestURL = backupFolder.appendingPathComponent("backup-manifest.json")
         let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
         guard manifest.version == 1, manifest.backupID == backup.id,
+              UUID(uuidString: backup.id) != nil,
+              manifest.sourceContainerID == container.id.uuidString,
+              backup.sourceContainerID == container.id.uuidString,
               manifest.files.count == backup.fileCount else {
             throw BackupError.invalidManifest
         }
@@ -145,12 +154,33 @@ enum WinlatorContainerBackupStorage {
     private static func verify(payload: URL, records: [FileRecord]) throws {
         let actual = try fileRecords(in: payload)
         guard actual.count == records.count else { throw BackupError.integrityFailure }
+        try validateRecords(records)
         let expectedByPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path, $0) })
         for item in actual {
             guard let expected = expectedByPath[item.path],
                   item.byteCount == expected.byteCount,
                   item.sha256 == expected.sha256 else {
                 throw BackupError.integrityFailure
+            }
+        }
+    }
+
+    private static func validateRecords(_ records: [FileRecord]) throws {
+        var paths = Set<String>()
+        for record in records {
+            let components = record.path.split(separator: "/", omittingEmptySubsequences: false)
+            let digestIsValid = record.sha256.count == 64 && record.sha256.unicodeScalars.allSatisfy {
+                (48...57).contains(Int($0.value)) || (97...102).contains(Int($0.value))
+            }
+            guard !record.path.isEmpty,
+                  !record.path.hasPrefix("/"),
+                  !record.path.contains("\\\\"),
+                  !components.isEmpty,
+                  components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
+                  record.byteCount >= 0,
+                  digestIsValid,
+                  paths.insert(record.path).inserted else {
+                throw BackupError.invalidManifest
             }
         }
     }
@@ -178,6 +208,7 @@ enum WinlatorContainerBackupStorage {
             let (digest, byteCount) = try hashFile(url)
             records.append(FileRecord(path: relative, byteCount: byteCount, sha256: digest))
         }
+        try validateRecords(records)
         return records.sorted { $0.path < $1.path }
     }
 
