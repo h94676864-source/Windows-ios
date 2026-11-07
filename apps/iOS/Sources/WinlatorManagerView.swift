@@ -25,6 +25,8 @@ struct WinlatorManagerView: View {
     @State private var showingImporter = false
     @State private var showingRuntimeInfo = false
     @State private var selectedContainer: WinlatorContainer?
+    @State private var selectedShortcut: WinlatorShortcut?
+    @State private var launchMessage: String?
     @State private var newContainerName = "My Windows Container"
     @State private var importError: String?
 
@@ -39,6 +41,20 @@ struct WinlatorManagerView: View {
                         Button("Import Windows EXE", systemImage: "square.and.arrow.down") { showingImporter = true }
                     } label: { Image(systemName: "plus.circle.fill") }
                 }
+            }
+            .sheet(item: $selectedShortcut) { shortcut in
+                WindowsAppLauncherSheet(shortcut: shortcut, containers: containers,
+                    onAssign: { updated, containerID in
+                        if let index = shortcuts.firstIndex(where: { $0.id == updated.id }) {
+                            shortcuts[index].containerID = containerID
+                            Self.save(shortcuts, key: "winlator.shortcuts")
+                        }
+                    },
+                    onLaunch: { app, container in
+                        launchMessage = WinlatorWineExecutionBridge.preflight(
+                            executableURL: URL(fileURLWithPath: app.localPath), container: container
+                        )
+                    })
             }
             .sheet(item: $selectedContainer) { container in
                 ContainerSettingsView(container: container) { updated in
@@ -71,6 +87,14 @@ struct WinlatorManagerView: View {
             .fileImporter(isPresented: $showingImporter,
                 allowedContentTypes: [UTType(filenameExtension: "exe") ?? .data, UTType(filenameExtension: "msi") ?? .data],
                 allowsMultipleSelection: true, onCompletion: importExecutables)
+            .alert("Windows app launch", isPresented: Binding(
+                get: { launchMessage != nil },
+                set: { if !$0 { launchMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { launchMessage = nil }
+            } message: {
+                Text(launchMessage ?? "")
+            }
             .alert("Runtime information", isPresented: $showingRuntimeInfo) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -173,14 +197,16 @@ struct WinlatorManagerView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(shortcut.name).font(.subheadline.weight(.semibold))
                                     Text(shortcut.filename).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    Text("Container: " + (containers.first(where: { $0.id == shortcut.containerID })?.name ?? "Unassigned"))
+                                        .font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                                 }
                                 Spacer()
-                                Button { showingRuntimeInfo = true } label: {
+                                Button { selectedShortcut = shortcut } label: {
                                     Image(systemName: "play.fill").font(.caption.weight(.bold))
                                         .foregroundStyle(.white).frame(width: 34, height: 34)
                                         .background(.cyan, in: Circle())
                                 }
-                                .accessibilityLabel("Runtime status")
+                                .accessibilityLabel("Open app launcher")
                             }
                             .padding(11)
                             .background(.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
@@ -244,6 +270,74 @@ struct WinlatorManagerView: View {
     private static func save<T: Encodable>(_ value: T, key: String) {
         guard let data = try? JSONEncoder().encode(value) else { return }
         UserDefaults.standard.set(data, forKey: key)
+    }
+}
+
+
+private struct WindowsAppLauncherSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let shortcut: WinlatorShortcut
+    let containers: [WinlatorContainer]
+    let onAssign: (WinlatorShortcut, UUID?) -> Void
+    let onLaunch: (WinlatorShortcut, WinlatorContainer?) -> Void
+    @State private var selectedContainerID: UUID?
+
+    init(shortcut: WinlatorShortcut, containers: [WinlatorContainer],
+         onAssign: @escaping (WinlatorShortcut, UUID?) -> Void,
+         onLaunch: @escaping (WinlatorShortcut, WinlatorContainer?) -> Void) {
+        self.shortcut = shortcut
+        self.containers = containers
+        self.onAssign = onAssign
+        self.onLaunch = onLaunch
+        _selectedContainerID = State(initialValue: shortcut.containerID ?? containers.first?.id)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Windows application") {
+                    LabeledContent("Name", value: shortcut.name)
+                    LabeledContent("Installer", value: shortcut.filename)
+                    LabeledContent("File", value: URL(fileURLWithPath: shortcut.localPath).lastPathComponent)
+                }
+                Section("Container") {
+                    if containers.isEmpty {
+                        Text("Create a container before launching an app.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Picker("Run in", selection: $selectedContainerID) {
+                            ForEach(containers) { container in
+                                Text(container.name).tag(Optional(container.id))
+                            }
+                        }
+                        Button("Save container assignment") {
+                            onAssign(shortcut, selectedContainerID)
+                        }
+                        .disabled(selectedContainerID == shortcut.containerID)
+                    }
+                }
+                Section("Execution") {
+                    let runtime = WinlatorWineRuntimeStorage.status()
+                    LabeledContent("Wine runtime", value: runtime.title)
+                    Text(runtime.detail).font(.footnote).foregroundStyle(.secondary)
+                    Button {
+                        let container = containers.first(where: { $0.id == selectedContainerID })
+                        onLaunch(shortcut, container)
+                        dismiss()
+                    } label: {
+                        Label("Check and launch", systemImage: "play.fill")
+                    }
+                    .disabled(containers.isEmpty || selectedContainerID == nil)
+                }
+            }
+            .navigationTitle("App launcher")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
