@@ -16,6 +16,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  native-engine-source-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned Madeira source
+        run: git submodule update --init --depth 1 -- Vendor/Madeira
+
+      - name: Verify engine source pins and runtime status semantics
+        run: bash tools/verify-madeira-source.sh
+
   build:
     runs-on: macos-15-intel
     timeout-minutes: 45
