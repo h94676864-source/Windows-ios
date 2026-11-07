@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MADEIRA="$ROOT/Vendor/Madeira"
 OUT="$ROOT/dist/native-engine"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
-export ROOT JOBS
+export JOBS
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -32,6 +32,7 @@ log "Resolve pinned Madeira engine sources"
 git -C "$MADEIRA" submodule sync --recursive
 git -C "$MADEIRA" submodule update --init --recursive --depth 1
 git -C "$MADEIRA" submodule status --recursive
+[[ -x "$MADEIRA/wine/configure" ]] || die "Wine submodule checkout is incomplete: expected Vendor/Madeira/wine/configure."
 
 log "Install checksum-pinned LLVM-MinGW toolchain"
 bash "$MADEIRA/tools/build/setup-llvm-mingw.sh"
