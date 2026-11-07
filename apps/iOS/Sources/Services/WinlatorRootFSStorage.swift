@@ -75,7 +75,7 @@ enum RootFSError: LocalizedError {
         case .notDirectory:
             return "Select an extracted Linux root filesystem folder."
         case .invalidLayout(let folder):
-            return "RootFS is incomplete: required '(folder)' directory was not found."
+            return "RootFS is incomplete: required '\(folder)' directory was not found."
         }
     }
 }
