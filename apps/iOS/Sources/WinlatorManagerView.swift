@@ -381,6 +381,15 @@ private struct ContainerSettingsView: View {
                     Text(WinlatorWineRuntimeStorage.status().detail)
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("CPU translation runtimes") {
+                    let translation = WinlatorCPUTranslationRuntimeStorage.status()
+                    LabeledContent("Box64", value: translation.box64.title)
+                    Text(translation.box64.detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                    LabeledContent("Box86", value: translation.box86.title)
+                    Text(translation.box86.detail)
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Compatibility") {
                     Picker("CPU preset", selection: $container.box64Preset) {
                         ForEach(presets, id: \.self) { Text($0) }
