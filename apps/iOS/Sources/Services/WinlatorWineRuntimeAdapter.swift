@@ -56,15 +56,21 @@ enum WinlatorWineRuntimeAdapter {
         guard ext == "exe" || ext == "msi" else {
             return "Launch blocked: only .EXE and .MSI files are supported."
         }
-        guard FileManager.default.fileExists(atPath: executableURL.path) else {
-            return "Launch failed: installer file is missing."
+        let manager = FileManager.default
+        let executableValues = try? executableURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        let executableSize = (try? manager.attributesOfItem(atPath: executableURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        guard manager.fileExists(atPath: executableURL.path),
+              executableValues?.isRegularFile == true,
+              executableValues?.isSymbolicLink != true,
+              executableSize > 0 else {
+            return "Launch blocked: installer must be a non-empty regular file, not a symlink."
         }
         guard let symbols = resolve(), symbols.version == expectedABI else {
             return status().detail
         }
 
         do {
-            let support = try FileManager.default.url(
+            let support = try manager.url(
                 for: .applicationSupportDirectory, in: .userDomainMask,
                 appropriateFor: nil, create: true
             )
@@ -72,10 +78,19 @@ enum WinlatorWineRuntimeAdapter {
                 "Winlator/Containers/\(container.id.uuidString)", isDirectory: true
             )
             let prefix = root.appendingPathComponent("prefix", isDirectory: true)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: prefix.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                return "Launch blocked: prepare the Wine prefix before starting an app."
+            let rootValues = try? root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            let prefixValues = try? prefix.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard rootValues?.isDirectory == true, rootValues?.isSymbolicLink != true,
+                  prefixValues?.isDirectory == true, prefixValues?.isSymbolicLink != true else {
+                return "Launch blocked: container or Wine prefix is missing, invalid, or a symlink."
+            }
+            let metadataURL = prefix.appendingPathComponent("winlator-prefix.json")
+            let metadataValues = try? metadataURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard metadataValues?.isRegularFile == true, metadataValues?.isSymbolicLink != true,
+                  let metadataData = try? Data(contentsOf: metadataURL),
+                  let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
+                  metadata["containerID"] as? String == container.id.uuidString else {
+                return "Launch blocked: Wine prefix metadata is missing, invalid, or belongs to another container."
             }
             let request = LaunchRequest(
                 abiVersion: expectedABI,
@@ -112,10 +127,19 @@ enum WinlatorWineRuntimeAdapter {
               info["WinlatorWineRuntimeABI"] as? String == "ios-arm64-inprocess" else {
             return nil
         }
-        let binaryURL = frameworkURL.appendingPathComponent(executable)
+        guard !executable.isEmpty, executable == URL(fileURLWithPath: executable).lastPathComponent,
+              !executable.contains("..") else { return nil }
+        let infoURL = frameworkURL.appendingPathComponent("Info.plist")
+        let infoValues = try? infoURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         let frameworkValues = try? frameworkURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+        let binaryURL = frameworkURL.appendingPathComponent(executable)
         let binaryValues = try? binaryURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
-        guard frameworkValues?.isDirectory == true,
+        let frameworkRoot = frameworks.standardizedFileURL.resolvingSymlinksInPath().path + "/"
+        let resolvedFramework = frameworkURL.standardizedFileURL.resolvingSymlinksInPath().path
+        guard resolvedFramework.hasPrefix(frameworkRoot),
+              infoValues?.isRegularFile == true,
+              infoValues?.isSymbolicLink != true,
+              frameworkValues?.isDirectory == true,
               frameworkValues?.isSymbolicLink != true,
               binaryValues?.isRegularFile == true,
               binaryValues?.isSymbolicLink != true,
@@ -123,8 +147,12 @@ enum WinlatorWineRuntimeAdapter {
               let handle = dlopen(binaryURL.path, RTLD_NOW | RTLD_LOCAL) else {
             return nil
         }
+        guard let resolved = resolveSymbols(in: handle) else {
+            dlclose(handle)
+            return nil
+        }
         loadedHandle = handle
-        return resolveSymbols(in: handle)
+        return resolved
     }
 
     private static func resolveSymbols(in handle: UnsafeMutableRawPointer)
