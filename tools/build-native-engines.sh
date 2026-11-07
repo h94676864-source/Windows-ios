@@ -56,8 +56,14 @@ if [[ "$LLVM_SOURCE_OK" != 1 ]]; then
       clone --filter=blob:none --depth 1 --single-branch \
       --branch "$LLVM_TAG" --sparse \
       https://github.com/llvm/llvm-project.git "$LLVM_SRC"; then
-      if git -C "$LLVM_SRC" sparse-checkout set llvm &&
+      # LLVM's top-level llvm/CMakeLists.txt imports helper modules from
+      # the sibling cmake/ tree (ExtendPath, FindPrefixFromConfig,
+      # GNUInstallPackageDir, AddLLVM, etc.). Checking out llvm/ alone
+      # produces a late CMake configure failure after the expensive engines.
+      if git -C "$LLVM_SRC" sparse-checkout set llvm cmake &&
          [[ -f "$LLVM_SRC/llvm/CMakeLists.txt" ]] &&
+         [[ -f "$LLVM_SRC/cmake/modules/ExtendPath.cmake" ]] &&
+         [[ -f "$LLVM_SRC/cmake/modules/FindPrefixFromConfig.cmake" ]] &&
          [[ "$(git -C "$LLVM_SRC" describe --tags --exact-match 2>/dev/null || true)" == "$LLVM_TAG" ]]; then
         LLVM_SOURCE_OK=1
         break
