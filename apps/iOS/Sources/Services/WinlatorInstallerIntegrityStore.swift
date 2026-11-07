@@ -60,6 +60,20 @@ enum WinlatorInstallerIntegrityStore {
         let data = try Data(contentsOf: url)
         let manifest = try JSONDecoder().decode(Manifest.self, from: data)
         guard manifest.version == 1 else { throw IntegrityError.unsupportedManifest }
+        for (filename, entry) in manifest.entries {
+            let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+            guard !filename.isEmpty,
+                  URL(fileURLWithPath: filename).lastPathComponent == filename,
+                  !filename.contains("/"), !filename.contains("\\\\"),
+                  ext == "exe" || ext == "msi",
+                  entry.byteCount > 0,
+                  entry.sha256.count == 64,
+                  entry.sha256.unicodeScalars.allSatisfy({
+                      (48...57).contains(Int($0.value)) || (97...102).contains(Int($0.value))
+                  }) else {
+                throw IntegrityError.invalidEntry
+            }
+        }
         return manifest
     }
 
@@ -92,6 +106,7 @@ enum WinlatorInstallerIntegrityStore {
         case missingRecord
         case mismatch
         case unsupportedManifest
+        case invalidEntry
 
         var errorDescription: String? {
             switch self {
@@ -101,6 +116,8 @@ enum WinlatorInstallerIntegrityStore {
                 return "Installer integrity check failed: file content or size changed after import."
             case .unsupportedManifest:
                 return "Installer integrity manifest version is not supported."
+            case .invalidEntry:
+                return "Installer integrity manifest contains an invalid filename, size, or SHA-256 record."
             }
         }
     }

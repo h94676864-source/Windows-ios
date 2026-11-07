@@ -123,7 +123,18 @@ struct FilesView: View {
 
     private func currentFolder() -> URL? {
         guard let base = driveRoot() else { return nil }
-        return currentRelativePath.isEmpty ? base : base.appendingPathComponent(currentRelativePath, isDirectory: true)
+        let components = currentRelativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("\\") }) else {
+            return nil
+        }
+        var candidate = base
+        for component in components { candidate.appendPathComponent(String(component), isDirectory: true) }
+        let rootPath = base.standardizedFileURL.path
+        let candidatePath = candidate.standardizedFileURL.path
+        guard candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/"),
+              candidate.resolvingSymlinksInPath().path == rootPath ||
+              candidate.resolvingSymlinksInPath().path.hasPrefix(rootPath + "/") else { return nil }
+        return candidate
     }
 
     private func refresh() {
@@ -138,6 +149,16 @@ struct FilesView: View {
                 try saveDriveMaps(root: root)
             }
             guard let folder = currentFolder() else { entries = []; return }
+            guard let drive = driveRoot(),
+                  folder.standardizedFileURL.path == drive.standardizedFileURL.path ||
+                  folder.standardizedFileURL.path.hasPrefix(drive.standardizedFileURL.path + "/") else {
+                throw FileManagerViewError.invalidPath
+            }
+            let resolvedFolder = folder.resolvingSymlinksInPath()
+            guard resolvedFolder.path == drive.resolvingSymlinksInPath().path ||
+                  resolvedFolder.path.hasPrefix(drive.resolvingSymlinksInPath().path + "/") else {
+                throw FileManagerViewError.invalidPath
+            }
             try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
             entries = try fileManager.contentsOfDirectory(at: folder,
                 includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
@@ -160,9 +181,17 @@ struct FilesView: View {
             errorMessage = "File selected: \(url.lastPathComponent). Windows execution is not connected yet."
             return
         }
-        let base = driveRoot()
-        guard let base else { return }
-        let relative = url.path.replacingOccurrences(of: base.path + "/", with: "")
+        guard let base = driveRoot(), isSafeDirectChild(url, of: currentFolder() ?? base) else {
+            errorMessage = "This item is outside the current container folder."
+            return
+        }
+        let resolved = url.resolvingSymlinksInPath()
+        let root = base.resolvingSymlinksInPath().path
+        guard resolved.path.hasPrefix(root + "/") else {
+            errorMessage = "Opening a linked folder outside this drive is blocked."
+            return
+        }
+        let relative = url.standardizedFileURL.path.replacingOccurrences(of: base.standardizedFileURL.path + "/", with: "")
         currentRelativePath = relative
         refresh()
     }
@@ -179,8 +208,11 @@ struct FilesView: View {
         guard !name.isEmpty, !name.contains("/"), !name.contains(":"),
               let folder = currentFolder() else { return }
         do {
-            try fileManager.createDirectory(at: folder.appendingPathComponent(name, isDirectory: true),
-                withIntermediateDirectories: false)
+            let destination = folder.appendingPathComponent(name, isDirectory: true).standardizedFileURL
+            guard isContained(destination, in: driveRoot() ?? folder) else {
+                throw FileManagerViewError.invalidPath
+            }
+            try fileManager.createDirectory(at: destination, withIntermediateDirectories: false)
             refresh()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -191,9 +223,14 @@ struct FilesView: View {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
             guard let name = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !name.isEmpty, !name.contains("/"), !name.contains(":") else { return }
+                  !name.isEmpty, !name.contains("/"), !name.contains("\\"), !name.contains(":"),
+                  !name.contains("\0"), isSafeDirectChild(url, of: currentFolder() ?? url.deletingLastPathComponent()) else { return }
             do {
-                let destination = url.deletingLastPathComponent().appendingPathComponent(name)
+                let destination = url.deletingLastPathComponent().appendingPathComponent(name).standardizedFileURL
+                guard isContained(destination, in: driveRoot() ?? url.deletingLastPathComponent()),
+                      !fileManager.fileExists(atPath: destination.path) else {
+                    throw FileManagerViewError.invalidPath
+                }
                 try fileManager.moveItem(at: url, to: destination)
                 refresh()
             } catch { errorMessage = error.localizedDescription }
@@ -202,8 +239,24 @@ struct FilesView: View {
     }
 
     private func delete(_ url: URL) {
+        guard isSafeDirectChild(url, of: currentFolder() ?? url.deletingLastPathComponent()) else {
+            errorMessage = "This item is outside the current container folder."
+            return
+        }
         do { try fileManager.removeItem(at: url); refresh() }
         catch { errorMessage = error.localizedDescription }
+    }
+
+    private func isContained(_ candidate: URL, in root: URL) -> Bool {
+        let rootPath = root.standardizedFileURL.path
+        let candidatePath = candidate.standardizedFileURL.path
+        return candidatePath.hasPrefix(rootPath + "/")
+    }
+
+    private func isSafeDirectChild(_ item: URL, of folder: URL) -> Bool {
+        item.standardizedFileURL.deletingLastPathComponent() == folder.standardizedFileURL &&
+        item.standardizedFileURL.lastPathComponent != "." &&
+        item.standardizedFileURL.lastPathComponent != ".."
     }
 
     private func isDirectory(_ url: URL) -> Bool {
@@ -232,5 +285,14 @@ private extension UIApplication {
         var top = root
         while let presented = top?.presentedViewController { top = presented }
         return top
+    }
+}
+
+
+private enum FileManagerViewError: LocalizedError {
+    case invalidPath
+
+    var errorDescription: String? {
+        "The requested file operation is outside the selected drive or would overwrite an existing item."
     }
 }

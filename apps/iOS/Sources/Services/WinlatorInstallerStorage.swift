@@ -48,8 +48,14 @@ enum WinlatorInstallerStorage {
         let destination = uniqueDestination(for: source.lastPathComponent, in: folder)
         try FileManager.default.copyItem(at: source, to: destination)
         do {
+            let copiedInspection = try WinlatorInstallerInspector.inspect(destination)
+            guard copiedInspection.isStructurallyValid,
+                  copiedInspection.byteCount == inspection.byteCount,
+                  copiedInspection.sha256 == inspection.sha256 else {
+                throw InstallerStorageError.copyVerificationFailed
+            }
             try WinlatorInstallerIntegrityStore.record(
-                inspection: inspection, filename: destination.lastPathComponent, container: container
+                inspection: copiedInspection, filename: destination.lastPathComponent, container: container
             )
             let values = try destination.resourceValues(forKeys: [.fileSizeKey])
             return WinlatorInstallerRecord(
@@ -99,6 +105,7 @@ private enum InstallerStorageError: LocalizedError {
     case invalidLocation
     case invalidInstaller(String)
     case duplicateContent(String)
+    case copyVerificationFailed
 
     var errorDescription: String? {
         switch self {
@@ -110,6 +117,8 @@ private enum InstallerStorageError: LocalizedError {
             return "Installer validation failed. \(detail)"
         case .duplicateContent(let filename):
             return "This installer has already been imported as \(filename)."
+        case .copyVerificationFailed:
+            return "The copied installer failed SHA-256 or size verification. The incomplete copy was removed."
         }
     }
 }
