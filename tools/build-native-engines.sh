@@ -17,7 +17,7 @@ command -v brew >/dev/null || die "Homebrew is missing."
 
 # The app deployment target is a release invariant; do not silently change it
 # to match the upstream engine's lower minimum deployment settings.
-grep -Eq 'deploymentTarget:[[:space:]]*\{[[:space:]]*iOS:[[:space:]]*"18\.5"' "$ROOT/project.yml" ||
+grep -A2 -E '^[[:space:]]*deploymentTarget:' "$ROOT/project.yml" | grep -Eq 'iOS:[[:space:]]*"18\.5"' ||
   die "project.yml must keep iOS deployment target 18.5."
 grep -q 'IPHONEOS_DEPLOYMENT_TARGET: "18.5"' "$ROOT/project.yml" ||
   die "IPHONEOS_DEPLOYMENT_TARGET must remain 18.5."
